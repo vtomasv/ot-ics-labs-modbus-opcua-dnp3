@@ -3,6 +3,8 @@ services:
   plant:
     build: .
     image: ot-ics-labs:local
+    platform: linux/amd64
+    pull_policy: build
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
     restart: unless-stopped
     environment:
@@ -30,6 +32,8 @@ services:
   trainer:
     build: .
     image: ot-ics-labs:local
+    platform: linux/amd64
+    pull_policy: build
     command: ["uvicorn", "trainerapp.runner:app", "--host", "0.0.0.0", "--port", "8100"]
     restart: unless-stopped
     environment:
@@ -50,6 +54,8 @@ services:
   dnp3:
     build: .
     image: ot-ics-labs:local
+    platform: linux/amd64
+    pull_policy: build
     command: ["python", "dnp3/outstation.py"]
     restart: unless-stopped
     depends_on:

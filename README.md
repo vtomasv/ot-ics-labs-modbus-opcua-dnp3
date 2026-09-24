@@ -16,7 +16,7 @@ Después de ejecutar **Señal DNP3** y **Escritura Modbus**, el semáforo aparec
 
 ## Requisitos y arranque
 
-Use Linux **x86_64/amd64**, Docker Engine, el plugin **Docker Compose v2** y al menos **2 GB libres** para imágenes y evidencias. Suricata resuelve `trainer` y selecciona la interfaz de red que lo alcanza, sin depender de un nombre como `eth1` ni de Docker Engine 28.1. Python 3.11, las bibliotecas de protocolos y `tcpdump` se instalan **dentro de la imagen**: el alumno no necesita instalarlos en el anfitrión. Wireshark o Tshark en el anfitrión son opcionales para abrir capturas.
+Use Docker Engine, el plugin **Docker Compose v2** y al menos **2 GB libres** para imágenes y evidencias. Los tres servicios Python se construyen y ejecutan explícitamente como `linux/amd64`, porque la rueda fijada de `dnp3-python` solo existe para esa arquitectura. En un anfitrión **ARM64** (por ejemplo Apple Silicon), Docker Desktop necesita tener disponible la emulación amd64; puede tardar más y no constituye soporte ARM nativo. Si usa Docker Desktop en macOS, consulte la opción de **Rosetta para emulación x86_64/amd64** en sus ajustes cuando esté disponible. [5] Suricata resuelve `trainer` y selecciona la interfaz de red que lo alcanza, sin depender de un nombre como `eth1` ni de Docker Engine 28.1. Python 3.11, las bibliotecas de protocolos y `tcpdump` se instalan **dentro de la imagen**: el alumno no necesita instalarlos en el anfitrión. Wireshark o Tshark en el anfitrión son opcionales para abrir capturas.
 
 ```bash
 git clone https://github.com/vtomasv/ot-ics-labs-modbus-opcua-dnp3.git
@@ -27,11 +27,11 @@ docker compose ps
 bash scripts/verify-lab.sh
 ```
 
-La primera construcción necesita acceso a los repositorios Debian, PyPI y al registro de imágenes de Docker. `docker compose ps` debe mostrar `plant` y `trainer` como **healthy** y `dnp3` y `suricata` como **running**. El script de verificación espera a que operador y RTU respondan y después comprueba cuatro escenarios, una firma Suricata de un FC06 reciente y las tramas antes/después del proxy. La salida termina en `PASS TODOS LOS ESCENARIOS`.
+La primera construcción necesita acceso a los repositorios Debian, PyPI y al registro de imágenes de Docker. `pull_policy: build` evita que Compose intente descargar del registro la imagen local inexistente `ot-ics-labs:local`; **solo la imagen pública de Suricata se descarga**. `docker compose ps` debe mostrar `plant` y `trainer` como **healthy** y `dnp3` y `suricata` como **running**. El script de verificación espera a que operador y RTU respondan y después comprueba cuatro escenarios, una firma Suricata de un FC06 reciente y las tramas antes/después del proxy. La salida termina en `PASS TODOS LOS ESCENARIOS`. [6]
 
 Para reconstruir después de modificar el código, use `docker compose up -d --build`; el primer arranque en un clon limpio **ya construye la imagen** mediante `docker compose up -d`.
 
-El flujo `.github/workflows/compose-ci.yml` repite la construcción y estas comprobaciones en GitHub Actions para cada cambio de la rama `main` y cada pull request. Si falla, consulte su log antes de usar el cambio en un taller.
+El flujo `.github/workflows/compose-ci.yml` repite la construcción y estas comprobaciones en GitHub Actions sobre runners Linux **amd64 y arm64** para cada cambio de `main` y cada pull request. En el runner ARM64 se habilita QEMU para probar la imagen amd64 emulada; esto no equivale a una validación nativa en macOS o Windows. Si falla, consulte su log antes de usar el cambio en un taller.
 
 Abra **http://127.0.0.1:8080/** en el mismo anfitrión. Solo esa API web se publica, vinculada a `127.0.0.1`; los puertos industriales permanecen en Docker. Si `8080` está ocupado, copie `.env.example` a `.env`, cambie `DASHBOARD_PORT` y abra el puerto local elegido. **No cambie el bind de loopback a `0.0.0.0`.** La variable `LAB_TOKEN` del ejemplo es un token de demostración interno, no una credencial de producción.
 
@@ -70,7 +70,7 @@ Ambos scripts usan `plant:502` sin argumentos para cambiar el destino. Para obte
 
 La red Docker `control` es `internal: true`; `dashboard` conecta el panel al anfitrión. Esto aproxima un **conducto** de entrenamiento, no una DMZ o zona IEC 62443 certificada. Consulte [arquitectura](docs/arquitectura.md), [escenarios y límites](docs/escenarios-ataque.md), [mapeo MITRE/IEC](docs/mapping-mitre-ics.md) y [diagnóstico](docs/diagnostico.md). El documento de [validación](docs/validacion.md) detalla pruebas reproducibles y límites conocidos.
 
-**Dependencia DNP3:** la estación remota usa `dnp3-python==0.3.0b1`, una distribución cuya versión está marcada *yanked* en PyPI. Fue validada aquí sobre Python 3.11 y Linux amd64, pero **no es apta para producción industrial**; no se promete soporte ARM. El master `dnp3/native_master.py` implementa solo la transacción necesaria para esta maqueta: CRC, comando analógico y lectura de retorno; no es una pila DNP3 general ni soporta fragmentación arbitraria o autenticación segura. Si la rueda deja de estar disponible, la construcción puede fallar: verifique la instalación antes de cada taller.
+**Dependencia DNP3:** la estación remota usa `dnp3-python==0.3.0b1`, una distribución cuya versión está marcada *yanked* en PyPI. Su rueda para Python 3.11 solo está disponible en Linux `x86_64`: Compose fija `linux/amd64` para `plant`, `trainer` y `dnp3` y no requiere una rueda `arm64`. Se validó en Linux amd64; en ARM64 depende de la emulación del entorno Docker y su rendimiento puede ser menor. **No es apta para producción industrial.** El master `dnp3/native_master.py` implementa solo la transacción necesaria para esta maqueta: CRC, comando analógico y lectura de retorno; no es una pila DNP3 general ni soporta fragmentación arbitraria o autenticación segura. Si la rueda deja de estar disponible, la construcción puede fallar: verifique la instalación antes de cada taller. [7]
 
 El modelo de proceso incluye una parada por nivel/temperatura en software para ejercitar observación. **No es un SIS real.** Los eventos del gemelo, el PCAP y las firmas del IDS tienen orígenes distintos: confirme por lo menos dos fuentes antes de atribuir una anomalía.
 
@@ -94,3 +94,6 @@ Si el panel abre pero un botón falla, espere a que `trainer` esté **healthy**,
 [2]: https://dnp3.github.io/docs/guide/3.0.0/api/outstations/ "OpenDNP3: outstations"
 [3]: https://csrc.nist.gov/pubs/sp/800/82/r3/final "NIST SP 800-82 Rev. 3, Guide to Operational Technology Security"
 [4]: https://docs.suricata.io/en/latest/rules/modbus-keyword.html "Suricata Modbus rules documentation"
+[5]: https://docs.docker.com/desktop/settings-and-maintenance/settings/ "Docker Desktop settings: Rosetta for x86_64/amd64 emulation on Apple Silicon"
+[6]: https://docs.docker.com/reference/compose-file/build/ "Docker Compose Build Specification: image and pull_policy"
+[7]: https://pypi.org/pypi/dnp3-python/0.3.0b1/json "Metadatos PyPI de dnp3-python: ruedas disponibles y estado yanked"

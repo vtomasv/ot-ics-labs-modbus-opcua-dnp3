@@ -11,16 +11,28 @@ permissions:
 
 jobs:
   lab:
-    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+      - name: Enable amd64 container emulation on ARM64
+        if: matrix.runner == 'ubuntu-24.04-arm'
+        uses: docker/setup-qemu-action@v4
+        with:
+          platforms: amd64
       - name: Check Compose version and configuration
         run: |
           docker compose version
           docker compose config --quiet
+          test "$(docker compose config --format json | jq -r '.services.plant.platform')" = linux/amd64
+          test "$(docker compose config --format json | jq -r '.services.trainer.platform')" = linux/amd64
+          test "$(docker compose config --format json | jq -r '.services.dnp3.platform')" = linux/amd64
       - name: Build and start the isolated plant
-        run: docker compose up -d --build
+        run: docker compose up -d
       - name: Verify all four protocol scenarios and IDS
         run: bash scripts/verify-lab.sh
       - name: Verify DNP3 outstation and master framing
