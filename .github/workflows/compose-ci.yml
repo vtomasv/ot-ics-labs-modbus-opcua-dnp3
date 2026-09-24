@@ -1,0 +1,34 @@
+name: Docker Compose lab verification
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  lab:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Compose version and configuration
+        run: |
+          docker compose version
+          docker compose config --quiet
+      - name: Build and start the isolated plant
+        run: docker compose up -d --build
+      - name: Verify all four protocol scenarios and IDS
+        run: bash scripts/verify-lab.sh
+      - name: Verify DNP3 outstation and master framing
+        run: |
+          docker compose exec -T dnp3 python /lab/dnp3/smoke.py
+          docker compose exec -T plant python /lab/dnp3/test_native_unit.py
+      - name: Stop services without deleting evidence
+        if: always()
+        run: |
+          docker compose logs --tail=80 plant trainer dnp3 suricata || true
+          docker compose down || true

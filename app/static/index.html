@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#071216">
+  <meta name="description" content="Consola educativa de operación y ciberseguridad industrial OT/ICS en escenario controlado de laboratorio.">
+  <title>OT/ICS Control Room · Laboratorio</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Saltar al contenido principal</a>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand-lockup" aria-label="OT ICS Control Room">
+        <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>
+        <div>
+          <p class="eyebrow">LABORATORIO / OT-ICS</p>
+          <h1>Control Room <span>OT/ICS</span></h1>
+        </div>
+      </div>
+      <div class="lab-ribbon"><span class="ribbon-dot"></span> ESCENARIO CONTROLADO DE LABORATORIO</div>
+      <div class="top-actions">
+        <div class="connection-pill" id="connection-pill" role="status" aria-live="polite"><span class="status-dot offline"></span><span id="connection-label">Conectando</span></div>
+        <span class="clock" id="clock" aria-label="Hora local">--:--:--</span>
+      </div>
+    </header>
+
+    <main id="main-content" class="workspace">
+      <section class="hero-row" aria-labelledby="page-title">
+        <div>
+          <p class="eyebrow accent">SIMULADOR VISUAL · TELEMETRÍA EN TIEMPO REAL</p>
+          <h2 id="page-title">Planta de tratamiento <span class="text-cyan">/</span> Línea A</h2>
+          <p class="hero-copy">Observa el proceso físico, interpreta tráfico industrial y practica respuestas ante eventos OT sin salir del perímetro de laboratorio.</p>
+        </div>
+        <div class="hero-meta" aria-label="Metadatos del entorno">
+          <div><span class="meta-label">ZONA</span><strong>LAB-A / CONDUCTO</strong></div>
+          <div><span class="meta-label">MODO</span><strong class="text-amber">SIMULACIÓN</strong></div>
+          <div><span class="meta-label">REFRESCO</span><strong>1 s</strong></div>
+        </div>
+      </section>
+
+      <div class="dashboard-grid">
+        <div class="primary-column">
+          <section class="panel scene-panel" aria-labelledby="scene-heading">
+            <div class="panel-heading">
+              <div><p class="eyebrow">VISTA ISOMÉTRICA</p><h3 id="scene-heading">Proceso físico monitorizado</h3></div>
+              <div class="scene-tools"><span class="live-chip"><i></i> LIVE</span><button class="icon-button" id="reset-camera" type="button" title="Restablecer cámara" aria-label="Restablecer cámara">↺</button></div>
+            </div>
+            <div class="scene-wrap" id="scene-wrap">
+              <canvas id="plant-canvas" aria-label="Visualización 3D isométrica de planta de agua con tanque, bomba, tuberías y semáforo"></canvas>
+              <div class="scene-hud hud-tank"><span class="hud-kicker">TK-101 / NIVEL</span><strong id="scene-level">--%</strong><span class="hud-bar"><i id="scene-level-bar"></i></span></div>
+              <div class="scene-hud hud-pump"><span class="hud-kicker">P-101 / BOMBA</span><strong id="scene-pump">--</strong><small id="scene-speed">-- Hz</small></div>
+              <div class="scene-hud hud-help">ARRASTRA <b>ROTAR</b> · RUEDA <b>ZOOM</b></div>
+            </div>
+            <div class="scene-caption"><span><i class="legend-line cyan"></i>Flujo de proceso</span><span><i class="legend-dot amber"></i>Instrumentación</span><span><i class="legend-dot red"></i>Alerta física</span><span class="caption-right">Modelo procedural · sin imágenes</span></div>
+          </section>
+
+          <section class="telemetry-grid" aria-label="Telemetría operacional">
+            <article class="metric-card cyan-card"><div class="metric-top"><span class="metric-icon">⌁</span><span class="metric-tag">TK-101</span><span class="trend up">● LIVE</span></div><p>Nivel de tanque</p><div class="metric-value"><strong id="tank-level">--</strong><span>%</span></div><div class="mini-progress"><i id="tank-level-progress"></i></div><small>Umbral operativo 35–85%</small></article>
+            <article class="metric-card"><div class="metric-top"><span class="metric-icon">◉</span><span class="metric-tag">P-101</span><span class="trend" id="pump-state-tag">--</span></div><p>Setpoint bomba</p><div class="metric-value"><strong id="speed-setpoint">--</strong><span>Hz</span></div><div class="metric-scale"><span>0</span><i><b id="speed-progress"></b></i><span>100</span></div><small>Nominal ≤60 Hz · exceso = anomalía</small></article>
+            <article class="metric-card amber-card"><div class="metric-top"><span class="metric-icon">◌</span><span class="metric-tag">TT-201</span><span class="trend" id="temperature-status">NOMINAL</span></div><p>Temperatura proceso</p><div class="metric-value"><strong id="temperature">--</strong><span>°C</span></div><div class="metric-scale"><span>15</span><i><b id="temperature-progress"></b></i><span>55</span></div><small>Margen térmico de proceso</small></article>
+            <article class="metric-card"><div class="metric-top"><span class="metric-icon">≋</span><span class="metric-tag">FT-101</span><span class="trend up">● LIVE</span></div><p>Caudal de salida</p><div class="metric-value"><strong id="flow">--</strong><span>m³/h</span></div><div class="sparkline" id="flow-sparkline" aria-label="Tendencia de caudal"></div><small>Últimos 60 segundos</small></article>
+          </section>
+
+          <section class="panel controls-panel" aria-labelledby="controls-heading">
+            <div class="panel-heading"><div><p class="eyebrow">OPERACIÓN MANUAL</p><h3 id="controls-heading">Acciones de laboratorio</h3></div><span class="lock-badge">▣ SOLO ENTORNO LOCAL</span></div>
+            <div class="controls-layout">
+              <div class="control-block">
+                <div class="control-label-row"><label for="speed-slider">Setpoint de bomba <strong id="speed-value">35 Hz</strong></label><span class="input-hint">0–60 Hz</span></div>
+                <input id="speed-slider" type="range" min="0" max="60" value="35" step="1" aria-label="Setpoint de bomba en hercios">
+                <div class="range-labels"><span>Parada</span><span>Operación nominal</span><span>Máximo</span></div>
+              </div>
+              <div class="control-block switch-block"><label class="toggle-label" for="pump-toggle"><span><strong>Arranque de bomba</strong><small>Comando manual P-101</small></span><input id="pump-toggle" type="checkbox"><span class="toggle-ui" aria-hidden="true"></span></label><p class="control-note" id="manual-status">Esperando telemetría del controlador.</p></div>
+            </div>
+          </section>
+        </div>
+
+        <aside class="secondary-column">
+          <section class="panel state-panel" aria-labelledby="state-heading">
+            <div class="panel-heading"><div><p class="eyebrow">ESTADO DEL SISTEMA</p><h3 id="state-heading">Indicadores físicos</h3></div><span class="state-severity" id="safety-badge">--</span></div>
+            <div class="state-list">
+              <div class="state-row"><div class="state-name"><span class="state-light green"></span><span>Seguridad de proceso</span></div><strong id="safety-state">--</strong></div>
+              <div class="state-row"><div class="state-name"><span class="state-light" id="traffic-light"></span><span>Semáforo virtual</span></div><strong id="traffic-state">--</strong></div>
+              <div class="state-row"><div class="state-name"><span class="state-light amber"></span><span>Cartel de aviso</span></div><strong id="sign-state">--</strong></div>
+            </div>
+            <div class="physical-sign" id="physical-sign"><span class="sign-symbol">!</span><span id="sign-message">ESPERANDO ESTADO</span></div>
+          </section>
+
+          <section class="panel scenario-panel" aria-labelledby="scenario-heading">
+            <div class="panel-heading"><div><p class="eyebrow">ENTRENAMIENTO OT</p><h3 id="scenario-heading">Escenarios predefinidos</h3></div><span class="scenario-counter" id="scenario-counter">0/5</span></div>
+            <p class="panel-intro">Ejecuta una secuencia controlada y observa su huella en el proceso y en la red.</p>
+            <div class="scenario-list">
+              <button class="scenario-button" type="button" data-scenario="modbus-write"><span class="scenario-number">01</span><span><strong>Escritura Modbus</strong><small>FC06 · cambio de setpoint</small></span><b>›</b></button>
+              <button class="scenario-button" type="button" data-scenario="opcua-write"><span class="scenario-number">02</span><span><strong>Escritura OPC UA</strong><small>Comando de variable de proceso</small></span><b>›</b></button>
+              <button class="scenario-button" type="button" data-scenario="dnp3-signal"><span class="scenario-number">03</span><span><strong>Señal DNP3</strong><small>Control de salida / estación RTU</small></span><b>›</b></button>
+              <button class="scenario-button warning" type="button" data-scenario="intercept"><span class="scenario-number">04</span><span><strong>Proxy de trama Modbus</strong><small>Alteración controlada de un mensaje</small></span><b>›</b></button>
+              <button class="scenario-button reset-button" type="button" data-scenario="reset"><span class="scenario-number">05</span><span><strong>Restablecer laboratorio</strong><small>Volver al estado nominal</small></span><b>›</b></button>
+            </div>
+            <div class="scenario-feedback" id="scenario-feedback" role="status" aria-live="polite"><span class="feedback-mark">i</span><span>Selecciona un escenario para comenzar.</span></div>
+          </section>
+
+          <section class="panel frame-panel" id="frame-panel" aria-labelledby="frame-heading">
+            <div class="panel-heading"><div><p class="eyebrow">INSPECCIÓN DE PROTOCOLO</p><h3 id="frame-heading">Trama MBAP</h3></div><span class="frame-status" id="frame-status">SIN CAPTURA</span></div>
+            <div class="frame-view"><div class="frame-column"><span>ANTES</span><code id="frame-before">—</code></div><div class="frame-arrow">→</div><div class="frame-column after"><span>DESPUÉS</span><code id="frame-after">—</code></div></div>
+          </section>
+
+          <section class="panel traffic-panel" aria-labelledby="traffic-heading">
+            <div class="panel-heading"><div><p class="eyebrow">RED INDUSTRIAL</p><h3 id="traffic-heading">Tráfico en vivo</h3></div><button class="text-button" id="export-events" type="button">↓ JSON</button></div>
+            <div class="traffic-list" id="traffic-list"><div class="empty-state">Esperando paquetes…</div></div>
+            <div class="protocol-legend"><span><b class="proto modbus">MB</b><span><strong>FC03</strong> lectura</span></span><span><b class="proto modbus write">MB</b><span><strong>FC06</strong> escritura</span></span><span><b class="proto opcua">OP</b><span><strong>OPC UA</strong> real</span></span><span><b class="proto dnp3">D3</b><span><strong>DNP3</strong> real</span></span></div>
+          </section>
+        </aside>
+      </div>
+
+      <section class="bottom-grid" aria-label="Historial y análisis">
+        <section class="panel history-panel" aria-labelledby="history-heading"><div class="panel-heading"><div><p class="eyebrow">OBSERVABILIDAD</p><h3 id="history-heading">Banda de eventos histórica</h3></div><div class="history-meta"><span id="event-count">0 eventos</span><span class="history-key"><i class="key-dot normal"></i>normal <i class="key-dot warning"></i>aviso <i class="key-dot critical"></i>crítico</span></div></div><div class="event-band" id="event-band" role="img" aria-label="Banda de severidad de los eventos históricos"><span class="empty-band">Sin eventos registrados</span></div><div class="timeline-labels"><span>− 60 min</span><span>ahora</span></div></section>
+        <section class="panel risk-panel" aria-labelledby="risk-heading"><div class="panel-heading"><div><p class="eyebrow">LECTURA RÁPIDA</p><h3 id="risk-heading">Riesgos y alertas</h3></div><span class="alert-count" id="alert-count">0</span></div><div class="risk-body"><div class="risk-score"><div class="score-ring" id="score-ring"><strong id="risk-score">OK</strong></div><span>postura del<br>laboratorio</span></div><div class="risk-copy"><p id="risk-summary">No hay señales de compromiso activas. Mantén los comandos dentro del escenario.</p><div class="alert-strip" id="alert-strip"><span class="alert-icon">!</span><span>Alertas recientes se mostrarán aquí.</span></div></div></div></section>
+      </section>
+    </main>
+
+    <footer class="footer"><span>OT/ICS CONTROL ROOM · MÓDULO EDUCATIVO</span><span>Todos los comandos están limitados al escenario controlado de laboratorio.</span><span id="last-update">Última lectura: —</span></footer>
+  </div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="./dashboard.js"></script>
+</body>
+</html>

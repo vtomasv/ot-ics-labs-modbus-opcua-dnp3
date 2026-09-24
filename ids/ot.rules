@@ -1,0 +1,6 @@
+# OT-LAB: firmas solo para paquetes de la red privada Docker de este ejercicio.
+# La detección no sustituye autorización de comandos ni verificación de seguridad de proceso.
+alert tcp any any -> any 502 (msg:"OT-LAB Modbus FC06 Write Single Holding Register"; flow:to_server,established; content:"|06|"; offset:7; depth:1; classtype:policy-violation; sid:1100001; rev:2;)
+alert tcp any any -> any 502 (msg:"OT-LAB Modbus FC16 Write Multiple Holding Registers"; flow:to_server,established; content:"|10|"; offset:7; depth:1; classtype:policy-violation; sid:1100002; rev:2;)
+alert tcp any any -> any 20000 (msg:"OT-LAB DNP3 request hacia outstation"; flow:to_server,established; content:"|05 64|"; depth:2; classtype:policy-violation; sid:1100003; rev:1;)
+alert tcp any any -> any 4840 (msg:"OT-LAB conexion HEL a endpoint OPC UA de ensayo"; flow:to_server,established; content:"HEL"; depth:3; classtype:policy-violation; sid:1100004; rev:1;)

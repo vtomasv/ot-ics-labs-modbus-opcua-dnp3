@@ -1,0 +1,92 @@
+name: ot-ics-labs
+services:
+  plant:
+    build: .
+    image: ot-ics-labs:local
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    restart: unless-stopped
+    environment:
+      LAB_TOKEN: ${LAB_TOKEN:-ot-ics-local-demo-token}
+      SURICATA_EVE: /suricata/eve.json
+      LAB_LOG_PATH: /evidence/ot-events.jsonl
+    ports:
+      - "127.0.0.1:${DASHBOARD_PORT:-8080}:8000"
+    networks:
+      dashboard:
+        interface_name: eth0
+      control:
+        interface_name: eth1
+    volumes:
+      - ./pcaps:/captures
+      - evidence:/evidence
+      - suricata-logs:/suricata:ro
+    healthcheck:
+      test: ["CMD", "python", "/lab/scripts/health.py"]
+      interval: 8s
+      timeout: 4s
+      retries: 12
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+
+  trainer:
+    build: .
+    image: ot-ics-labs:local
+    command: ["uvicorn", "trainerapp.runner:app", "--host", "0.0.0.0", "--port", "8100"]
+    restart: unless-stopped
+    environment:
+      LAB_TOKEN: ${LAB_TOKEN:-ot-ics-local-demo-token}
+    depends_on:
+      plant:
+        condition: service_healthy
+    networks:
+      - control
+    healthcheck:
+      test: ["CMD", "python", "/lab/scripts/health.py", "trainer"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+    security_opt:
+      - no-new-privileges:true
+
+  dnp3:
+    build: .
+    image: ot-ics-labs:local
+    command: ["python", "dnp3/outstation.py"]
+    restart: unless-stopped
+    depends_on:
+      plant:
+        condition: service_healthy
+    network_mode: "service:plant"
+    security_opt:
+      - no-new-privileges:true
+
+  suricata:
+    image: jasonish/suricata:8.0
+    restart: unless-stopped
+    network_mode: "service:plant"
+    depends_on:
+      plant:
+        condition: service_healthy
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+      - SYS_NICE
+    environment:
+      SURICATA_OPTIONS: "-i eth1 -S /rules/ot.rules"
+    volumes:
+      - ./ids/ot.rules:/rules/ot.rules:ro
+      - suricata-logs:/var/log/suricata
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  control:
+    internal: true
+    driver: bridge
+  dashboard:
+    driver: bridge
+
+volumes:
+  evidence:
+  suricata-logs:

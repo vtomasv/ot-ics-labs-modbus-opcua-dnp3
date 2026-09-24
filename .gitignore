@@ -1,0 +1,17 @@
+# Dependencias y cachés locales
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.env
+
+# Capturas de alumnos; conservar únicamente la referencia revisada
+pcaps/*.pcap
+pcaps/*.pcapng
+!pcaps/ejemplo-referencia.pcap
+
+# Registros y volcados de procesos
+*.log
+*.core
+/core
+/core.[0-9]*
