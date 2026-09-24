@@ -10,14 +10,14 @@ El proceso físico es un **gemelo digital**. Una tarea de simulación calcula ni
             │       │       └─ outstation DNP3 (20000/TCP, mismo namespace)
             │       └───────── OPC UA (4840/TCP, endpoint None de ensayo)
             └───────────────── Modbus/TCP (502/TCP)
-              interfaz eth1 sobre red control `internal: true`
+              interfaz de ruta a trainer en red `control`, `internal: true`
             ▲                                    │
             │ tráfico real                        │ copia pasiva
        [trainer] ────────────────────────> [suricata en namespace plant]
        cliente/maestro                         EVE JSON al panel
 ```
 
-El servicio `trainer` solo está conectado a `control`, una red Docker interna. `plant` conecta `control` y `dashboard` para que el navegador local vea la maqueta. **Ese puente no satisface la arquitectura de DMZ industrial**: representa precisamente una decisión de acceso que los alumnos deben cuestionar. El tablero, además, se publica solo en loopback. Para separar usos didácticos del anfitrión, ni 502 ni 4840 ni 20000 se publican. El sensor Suricata usa `network_mode: service:plant` para **ver la interfaz eth1 de la zona control**, lo que evita prometer visibilidad de tráfico ajeno al namespace. `interface_name` exige una versión reciente de Compose (v2.36 o superior). En un entorno industrial se preferiría SPAN/TAP autorizado, evitando cargas activas sobre controladores. [1]
+El servicio `trainer` solo está conectado a `control`, una red Docker interna. `plant` conecta `control` y `dashboard` para que el navegador local vea la maqueta. **Ese puente no satisface la arquitectura de DMZ industrial**: representa precisamente una decisión de acceso que los alumnos deben cuestionar. El tablero, además, se publica solo en loopback. Para separar usos didácticos del anfitrión, ni 502 ni 4840 ni 20000 se publican. El sensor Suricata usa `network_mode: service:plant` y `ids/start-suricata.sh` resuelve `trainer` para capturar **la interfaz que lleva al conducto `control`**, aunque Docker le asigne otro nombre. No se promete visibilidad de tráfico ajeno al namespace. En un entorno industrial se preferiría SPAN/TAP autorizado, evitando cargas activas sobre controladores. [1]
 
 **Modelo Purdue aproximado:** `trainer` actúa como aplicación de supervisión/ingeniería (nivel 2–3), `plant` agrupa controlador y proceso (nivel 0–1 emulados), mientras que la consola está fuera de la zona de control; esta agregación de funciones en contenedores **no reproduce la separación física ni funcional real**. El conducto autorizado sería supervisión→RTU para lecturas; la escritura exigiría un conjunto mucho menor de identidades, horarios, rangos y aprobaciones. La simulación no implementa MFA, sesión grabada, hardware PLC, firmware ni un SIS auténtico.
 

@@ -1,6 +1,6 @@
 # Pruebas del repositorio
 
-La maqueta se probó en **Linux x86_64/amd64 con Docker Compose v2.36+**. Los cuatro servicios se iniciaron; `plant` y `trainer` quedaron saludables. La API web se publicó únicamente en `127.0.0.1:8080` y los puertos OT `502`, `4840` y `20000` permanecieron privados. La construcción necesita acceso a Debian, PyPI y Docker Hub; sobre ARM **no** se ha validado la rueda DNP3.
+La maqueta se probó en **Linux x86_64/amd64 con Docker Compose v2**. Los cuatro servicios se iniciaron; `plant` y `trainer` quedaron saludables. La API web se publicó únicamente en `127.0.0.1:8080` y los puertos OT `502`, `4840` y `20000` permanecieron privados. La construcción necesita acceso a Debian, PyPI y Docker Hub; sobre ARM **no** se ha validado la rueda DNP3. El sensor IDS selecciona su interfaz según la ruta hacia `trainer` en lugar de requerir una versión concreta de Docker Engine.
 
 | Comprobación | Resultado esperado y observado en la prueba |
 |---|---|

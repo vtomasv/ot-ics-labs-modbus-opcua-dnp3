@@ -16,7 +16,7 @@ Después de ejecutar **Señal DNP3** y **Escritura Modbus**, el semáforo aparec
 
 ## Requisitos y arranque
 
-Use Linux **x86_64/amd64**, Docker Engine, el plugin **Docker Compose v2.36+** y al menos **2 GB libres** para imágenes y evidencias. El proyecto usa `interface_name` de Compose para que Suricata capture exactamente `eth1`. Python 3.11, las bibliotecas de protocolos y `tcpdump` se instalan **dentro de la imagen**: el alumno no necesita instalarlos en el anfitrión. Wireshark o Tshark en el anfitrión son opcionales para abrir capturas.
+Use Linux **x86_64/amd64**, Docker Engine, el plugin **Docker Compose v2** y al menos **2 GB libres** para imágenes y evidencias. Suricata resuelve `trainer` y selecciona la interfaz de red que lo alcanza, sin depender de un nombre como `eth1` ni de Docker Engine 28.1. Python 3.11, las bibliotecas de protocolos y `tcpdump` se instalan **dentro de la imagen**: el alumno no necesita instalarlos en el anfitrión. Wireshark o Tshark en el anfitrión son opcionales para abrir capturas.
 
 ```bash
 git clone https://github.com/vtomasv/ot-ics-labs-modbus-opcua-dnp3.git
@@ -66,7 +66,7 @@ Ambos scripts usan `plant:502` sin argumentos para cambiar el destino. Para obte
 | `plant` | Gemelo, API, servidor Modbus 502 y servidor OPC UA 4840 | Solo panel HTTP `127.0.0.1:8080` |
 | `trainer` | Genera FC03; emite los comandos de los cuatro escenarios | Sin puertos publicados |
 | `dnp3` | Estación remota OpenDNP3 en 20000, mismo espacio de red que `plant` | Sin puertos publicados |
-| `suricata` | Captura pasiva de `eth1` y alertas EVE JSON | Sin puertos publicados |
+| `suricata` | Captura pasiva de la ruta a `trainer` y alertas EVE JSON | Sin puertos publicados |
 
 La red Docker `control` es `internal: true`; `dashboard` conecta el panel al anfitrión. Esto aproxima un **conducto** de entrenamiento, no una DMZ o zona IEC 62443 certificada. Consulte [arquitectura](docs/arquitectura.md), [escenarios y límites](docs/escenarios-ataque.md), [mapeo MITRE/IEC](docs/mapping-mitre-ics.md) y [diagnóstico](docs/diagnostico.md). El documento de [validación](docs/validacion.md) detalla pruebas reproducibles y límites conocidos.
 
@@ -86,7 +86,7 @@ bash scripts/verify-lab.sh
 curl -fsS http://127.0.0.1:8080/api/health
 ```
 
-Si el panel abre pero un botón falla, espere a que `trainer` esté **healthy**, revise sus logs y ejecute `verify-lab.sh`. Si el estado cambia pero no aparece una firma IDS, compruebe `docker compose logs suricata`; **no** confunda una alerta analítica con una firma capturada. En algunos anfitriones Linux que mezclan backends `iptables-legacy` y `nftables`, Docker puede bloquear la comunicación entre puentes; la [guía de diagnóstico](docs/diagnostico.md) explica cómo identificarlo sin copiar reglas de firewall ajenas. Nunca aplique `down -v` como primer paso de diagnóstico si necesita conservar evidencia.
+Si el panel abre pero un botón falla, espere a que `trainer` esté **healthy**, revise sus logs y ejecute `verify-lab.sh`. Si el estado cambia pero no aparece una firma IDS, compruebe `docker compose logs suricata` y el mensaje `Suricata: interfaz de control ...`; **no** confunda una alerta analítica con una firma capturada. En algunos anfitriones Linux que mezclan backends `iptables-legacy` y `nftables`, Docker puede bloquear la comunicación entre puentes; la [guía de diagnóstico](docs/diagnostico.md) explica cómo identificarlo sin copiar reglas de firewall ajenas. Nunca aplique `down -v` como primer paso de diagnóstico si necesita conservar evidencia.
 
 ## Referencias
 

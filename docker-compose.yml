@@ -12,10 +12,8 @@ services:
     ports:
       - "127.0.0.1:${DASHBOARD_PORT:-8080}:8000"
     networks:
-      dashboard:
-        interface_name: eth0
-      control:
-        interface_name: eth1
+      - dashboard
+      - control
     volumes:
       - ./pcaps:/captures
       - evidence:/evidence
@@ -63,6 +61,7 @@ services:
 
   suricata:
     image: jasonish/suricata:8.0
+    entrypoint: ["/bin/bash", "/rules/start-suricata.sh"]
     restart: unless-stopped
     network_mode: "service:plant"
     depends_on:
@@ -72,10 +71,9 @@ services:
       - NET_RAW
       - NET_ADMIN
       - SYS_NICE
-    environment:
-      SURICATA_OPTIONS: "-i eth1 -S /rules/ot.rules"
     volumes:
       - ./ids/ot.rules:/rules/ot.rules:ro
+      - ./ids/start-suricata.sh:/rules/start-suricata.sh:ro
       - suricata-logs:/var/log/suricata
     security_opt:
       - no-new-privileges:true
