@@ -92,6 +92,8 @@ services:
     pull_policy: build
     command: ["bash", "/lab/scripts/start-sensor.sh"]
     restart: unless-stopped
+    environment:
+      CAPTURE_BACKEND: ${CAPTURE_BACKEND:-auto}
     network_mode: "service:plant"
     depends_on:
       plant:

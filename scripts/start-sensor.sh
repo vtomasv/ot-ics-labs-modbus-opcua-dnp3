@@ -13,5 +13,13 @@ iface="$(ip -o route get "$peer" | awk '{for (i=1;i<=NF;i++) if ($i=="dev") {pri
 mkdir -p /captures/live
 printf 'Sensor: capturing control interface %s toward trainer=%s (502, 4840, 20000 TCP)\n' "$iface" "$peer"
 # Bounded disk usage: three rotating 16 MB segments. The UI reads the newest.
-exec tcpdump -Z root -i "$iface" -nn -s 1024 -U -C 16 -W 3 \
-  -w /captures/live/live.pcap 'tcp and (port 502 or port 4840 or port 20000)'
+# QEMU amd64 on ARM may reject libpcap's ETHTOOL_GET_TS_INFO ioctl even though
+# raw packet sockets work. Do not silently give up on real packet capture.
+if [[ "${CAPTURE_BACKEND:-auto}" != 'python' ]]; then
+  if tcpdump -Z root -i "$iface" -nn -s 1024 -U -C 16 -W 3 \
+    -w /captures/live/live.pcap 'tcp and (port 502 or port 4840 or port 20000)'; then
+    exit 0
+  fi
+  echo 'Sensor: tcpdump no disponible; usando AF_PACKET pasivo con PCAP real' >&2
+fi
+exec python /lab/scripts/capture_sensor.py "$iface"

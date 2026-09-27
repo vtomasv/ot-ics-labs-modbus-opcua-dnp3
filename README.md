@@ -19,7 +19,7 @@ bash scripts/verify-lab.sh
 python3 scripts/verify-workspaces.py
 ```
 
-La única publicación del Compose es **`127.0.0.1:8080 → plant:8000`**. Si el puerto está ocupado, copie `.env.example` a `.env` y cambie `DASHBOARD_PORT`, pero conserve el bind de loopback. `plant` y `trainer` deben aparecer **healthy**; `dnp3`, `suricata` y `sensor` deben estar **running**. Abra estas pantallas en el mismo anfitrión:
+La única publicación del Compose es **`127.0.0.1:8080 → plant:8000`**. Si el puerto está ocupado, copie `.env.example` a `.env` y cambie `DASHBOARD_PORT`, pero conserve el bind de loopback. `plant` y `trainer` deben aparecer **healthy**; `dnp3`, `suricata` y `sensor` deben estar **running**. Si libpcap/tcpdump falla bajo emulación amd64 en ARM, el sensor pasa automáticamente a **AF_PACKET** y sigue produciendo PCAP Ethernet real. `CAPTURE_BACKEND=python` permite forzar este modo para diagnóstico. Abra estas pantallas en el mismo anfitrión:
 
 | Pantalla | Objetivo comprobable | Tráfico / efecto en el gemelo | Guía |
 |---|---|---|---|
@@ -41,7 +41,7 @@ La raíz `/` abre la primera práctica. **Las pantallas son independientes, pero
 
 ### Captura y herramientas de análisis
 
-El sensor escribe en el volumen Docker `live-captures` **hasta tres segmentos de 16 MB**; el visor y `/api/capture/download` exponen el más reciente. Para guardar un PCAP propio en `pcaps/` use la captura de referencia del repositorio:
+El sensor (`tcpdump` o su respaldo pasivo AF_PACKET) escribe en el volumen Docker `live-captures` **hasta tres segmentos de 16 MB**; el visor y `/api/capture/download` exponen el más reciente. Para guardar un PCAP propio en `pcaps/` use la captura de referencia del repositorio:
 
 ```bash
 bash scripts/baseline-capture.sh
@@ -59,7 +59,7 @@ tshark -r pcaps/<archivo>.pcap -Y 'modbus || opcua || dnp3'
 | `trainer` | Cliente FC03 cada 3 s, escenarios de comando y master DNP3; **sin** puertos publicados |
 | `dnp3` | Outstation OpenDNP3 en 20000; comparte espacio de red con `plant`, no es un host IP independiente |
 | `suricata` | IDS pasivo de la interfaz hacia `trainer`, firmas EVE JSON; sin puerto publicado |
-| `sensor` | `tcpdump` pasivo, PCAP Ethernet rotativo; sin puerto publicado |
+| `sensor` | `tcpdump` pasivo con respaldo AF_PACKET en QEMU, PCAP Ethernet rotativo; sin puerto publicado |
 
 `control` es una red Docker `internal: true`; `dashboard` transporta el acceso web local. Las zonas/conductos de la pantalla son un **modelo de aula**, no una DMZ, separación Purdue real ni certificación IEC 62443. Consulte [arquitectura](docs/arquitectura.md), [escenarios y límites](docs/escenarios-ataque.md), [mapeo MITRE/IEC](docs/mapping-mitre-ics.md), [validación](docs/validacion.md) y [diagnóstico](docs/diagnostico.md).
 
@@ -77,7 +77,7 @@ docker compose logs --tail=100 plant trainer dnp3 suricata sensor
 curl -fsS http://127.0.0.1:8080/api/packets
 ```
 
-El primer script prueba los escenarios heredados y una firma FC06 real. El segundo comprueba **las cuatro páginas, sus matrices, acciones cruzadas rechazadas, FC03, FC06, OPC UA y DNP3 con estado y payload PCAP, descarga y estabilidad del reset**. Si el panel se desconecta, **no genera tráfico/estados falsos**: consulte [diagnóstico](docs/diagnostico.md). Si la distribución DNP3 yanked deja de estar disponible, el build puede fallar; informe la limitación en vez de sustituirla silenciosamente por HTTP ficticio.
+El primer script prueba los escenarios heredados y una firma FC06 real. El segundo comprueba **las cuatro páginas, sus matrices, acciones cruzadas rechazadas, FC03, FC06, OPC UA y DNP3 con estado y payload PCAP recién capturado, descarga y estabilidad del reset**. Las pruebas unitarias también verifican el filtro del sensor AF_PACKET. Si el panel se desconecta, **no genera tráfico/estados falsos**: consulte [diagnóstico](docs/diagnostico.md). Si la distribución DNP3 yanked deja de estar disponible, el build puede fallar; informe la limitación en vez de sustituirla silenciosamente por HTTP ficticio.
 
 Para parar **sin borrar** evidencia: `docker compose down`. **No use `docker compose down -v` si necesita los volúmenes** `evidence`, `suricata-logs` y `live-captures`. Los PCAP manuales de `pcaps/` son archivos del anfitrión y no se borran con `down`. Solo use `down -v` cuando haya decidido descartar esas evidencias.
 

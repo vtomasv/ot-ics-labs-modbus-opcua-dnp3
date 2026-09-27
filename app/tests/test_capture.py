@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import dpkt
 from app import capture
+from scripts.capture_sensor import PCAP_HEADER, is_ot_tcp_frame
 
 
 class CaptureTest(unittest.TestCase):
@@ -46,6 +47,19 @@ class CaptureTest(unittest.TestCase):
         self.assertIn('FC06', packet['summary'])
         self.assertEqual(packet['hex'], payload.hex(' ').upper())
         self.assertIn('PCAP REAL', packet['evidence'])
+
+    def test_fallback_filters_only_ot_tcp(self):
+        tcp = dpkt.tcp.TCP(sport=49000, dport=502, data=b'\x00')
+        tcp.off = 5
+        ip = dpkt.ip.IP(src=socket.inet_aton('10.1.1.2'), dst=socket.inet_aton('10.1.1.3'), p=6, data=tcp)
+        ip.len = len(ip)
+        eth = dpkt.ethernet.Ethernet(src=b'\x00' * 6, dst=b'\x01' * 6,
+                                    type=dpkt.ethernet.ETH_TYPE_IP, data=ip)
+        self.assertTrue(is_ot_tcp_frame(bytes(eth)))
+        tcp.dport = 80
+        self.assertFalse(is_ot_tcp_frame(bytes(eth)))
+        self.assertFalse(is_ot_tcp_frame(b'\x00' * 8))
+        self.assertEqual(len(PCAP_HEADER), 24)
 
 
 if __name__ == '__main__':

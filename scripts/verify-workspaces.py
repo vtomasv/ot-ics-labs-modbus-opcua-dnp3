@@ -27,7 +27,7 @@ def expect_status(path, expected, payload):
         raise AssertionError(f'Expected HTTP {expected}: {path}')
 
 
-def until(predicate, seconds=12):
+def until(predicate, seconds=30):
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
         if predicate():
@@ -43,6 +43,21 @@ def packets(protocol):
 
 def since(protocol, started):
     return [p for p in packets(protocol) if datetime.fromisoformat(p['ts']) >= started]
+
+
+def baseline_when_ready():
+    """The public API may be healthy before the separate trainer process is."""
+    for _ in range(25):
+        try:
+            started = datetime.now(timezone.utc) - timedelta(seconds=1)
+            result = request('/api/labs/01-baseline/inject', 'POST',
+                             {'protocol':'modbus','operation':'read','value':None})
+            return result, started
+        except HTTPError as exc:
+            if exc.code != 503:
+                raise
+            time.sleep(2)
+    raise AssertionError('El operador Docker no quedó listo en 50 segundos')
 
 
 def main():
@@ -63,8 +78,7 @@ def main():
     expect_status('/api/labs/01-baseline/inject', 400, {'protocol':'modbus','operation':'read','value':1})
     print('PASS acciones cruzadas y valores peligrosos rechazados')
     request('/api/labs/01-baseline/action/reset', 'POST')
-    started = datetime.now(timezone.utc) - timedelta(seconds=1)
-    result = request('/api/labs/01-baseline/inject', 'POST', {'protocol':'modbus','operation':'read','value':None})
+    result, started = baseline_when_ready()
     assert result['ok'] and result['function_code'] == 3
     until(lambda: any('FC03' in p['summary'] for p in since('Modbus/TCP', started)))
     print('PASS FC03 emitido y capturado')
