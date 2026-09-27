@@ -63,12 +63,12 @@ function updateState(state) {
   const anomaly = trip || speed > 60 || Number(state.traffic_signal) === 0 || Number(state.sign_code) >= 2;
   ui.safetyState.textContent = trip ? 'TRIP ACTIVO' : 'SEGURO'; ui.safetyBadge.textContent = anomaly ? 'ATENCIÓN' : 'NOMINAL'; ui.safetyBadge.style.color = anomaly ? 'var(--red)' : 'var(--green)';
   ui.pumpToggle.checked = pump; if (document.activeElement !== ui.speedSlider) { ui.speedSlider.value = clamp(speed, 0, 60); ui.speedValue.textContent = `${speed.toFixed(0)} Hz${speed > 60 ? ' / ANÓMALO' : ''}`; updateRangeBackground(); }
-  const traffic = clamp(Number(state.traffic_signal) || 0, 0, 2); const sign = clamp(Number(state.sign_code) || 0, 0, 3); ui.trafficState.textContent = trafficNames[traffic]; ui.signState.textContent = signNames[sign]; ui.signMessage.textContent = signNames[sign]; ui.physicalSign.style.borderColor = sign >= 2 ? 'rgba(250,93,93,.55)' : 'rgba(242,178,75,.24)'; ui.physicalSign.style.color = sign >= 2 ? 'var(--red)' : 'var(--amber)'; ui.trafficLight.className = `state-light ${traffic === 0 ? 'red' : traffic === 1 ? 'amber' : 'green'}`;
+  const traffic = clamp(Number(state.traffic_signal) || 0, 0, 2); const sign = clamp(Number(state.sign_code) || 0, 0, 3); ui.trafficState.textContent = trafficNames[traffic]; ui.signState.textContent = signNames[sign]; ui.signMessage.textContent = signNames[sign]; ui.physicalSign.style.borderColor = sign >= 2 ? '#e5aca7' : '#efdbbc'; ui.physicalSign.style.color = sign >= 2 ? 'var(--red)' : 'var(--amber)'; ui.trafficLight.className = `state-light ${traffic === 0 ? 'red' : traffic === 1 ? 'amber' : 'green'}`;
   scene?.updateState(state); flowHistory.push(flow); if (flowHistory.length > 32) flowHistory.shift(); renderSparkline();
   const updated = state.updated_at ? timeLabel(state.updated_at) : timeLabel(); ui.lastUpdate.textContent = `Última lectura: ${updated}`;
 }
 
-function updateRangeBackground() { const value = Number(ui.speedSlider.value); ui.speedSlider.style.background = `linear-gradient(90deg, var(--cyan) 0%, var(--cyan) ${value / 60 * 100}%, #1c3c43 ${value / 60 * 100}%, #1c3c43 100%)`; }
+function updateRangeBackground() { const value = Number(ui.speedSlider.value); ui.speedSlider.style.background = `linear-gradient(90deg, var(--lab-accent) 0%, var(--lab-accent) ${value / 60 * 100}%, var(--track) ${value / 60 * 100}%, var(--track) 100%)`; }
 function renderSparkline() { const el = $('flow-sparkline'); if (!el || !flowHistory.length) return; const min = Math.min(...flowHistory), max = Math.max(...flowHistory, min + 1); const points = flowHistory.map((v, i) => `${i / Math.max(flowHistory.length - 1, 1) * 100}% ${100 - (v - min) / (max - min) * 90}%`).join(','); el.style.clipPath = `polygon(0 100%, ${points}, 100% 100%)`; el.style.background = 'var(--cyan-deep)'; el.style.opacity = '.85'; }
 
 function renderEvents(events = []) {

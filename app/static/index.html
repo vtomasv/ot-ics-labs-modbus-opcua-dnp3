@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#071216">
+  <meta name="theme-color" content="#f3f6fa">
   <meta name="description" content="Consola educativa de operación y ciberseguridad industrial OT/ICS en escenario controlado de laboratorio.">
   <title>OT/ICS Control Room · Laboratorio</title>
   <link rel="stylesheet" href="/style.css">
@@ -15,8 +15,8 @@
       <div class="brand-lockup" aria-label="OT ICS Control Room">
         <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>
         <div>
-          <p class="eyebrow">LABORATORIO / OT-ICS</p>
-          <h1>Control Room <span>OT/ICS</span></h1>
+          <p class="eyebrow">PLATAFORMA DE ENTRENAMIENTO INDUSTRIAL</p>
+          <h1>OT / ICS <span>Control Studio</span></h1>
         </div>
       </div>
       <div class="lab-ribbon"><span class="ribbon-dot"></span> ESCENARIO CONTROLADO DE LABORATORIO</div>
@@ -29,7 +29,7 @@
     <main id="main-content" class="workspace">
       <section class="hero-row" aria-labelledby="page-title">
         <div>
-          <p class="eyebrow accent">PRÁCTICAS INDEPENDIENTES · RED DOCKER PRIVADA</p>
+          <p class="eyebrow accent">CENTRO DE OPERACIONES · RED DOCKER PRIVADA</p>
           <h2 id="page-title">Cargando laboratorio…</h2>
           <p class="hero-copy" id="lab-summary">La consola visual muestra el gemelo software; la captura de red proviene de un sensor pasivo independiente.</p>
         </div>
@@ -43,27 +43,21 @@
       <nav class="lab-nav" aria-label="Pantallas independientes de laboratorio" id="lab-nav"><span>Cargando catálogo…</span></nav>
       <div class="scope-warning" role="note"><strong>Alcance experimental:</strong> las tramas provienen de servidores OT dentro de Docker; tanque, bomba, semáforo y protección son un <strong>gemelo 3D/software</strong>, no un PLC ni un SIS físico. Todas las pantallas comparten el estado de esta maqueta: restablece antes de iniciar otra práctica. Sin conexión a una planta real.</div>
 
-      <section class="panel topology-panel" aria-labelledby="topology-heading">
-        <div class="panel-heading"><div><p class="eyebrow">ZONAS Y CONDUCTOS · MAPA LÓGICO</p><h3 id="topology-heading">Mapa de red de la práctica</h3></div><span class="live-chip" id="topology-status">Docker / aislado</span></div>
-        <div class="topology" id="topology"><p class="empty-inline">Cargando nodos…</p></div>
-        <div class="topology-flows" id="topology-flows"></div>
-        <p class="map-note">Topología declarada en Compose; líneas de protocolo resaltadas solo al observar payload en el PCAP. El outstation DNP3 comparte el espacio de red de <code>plant</code> (no es un host IP separado).</p>
-      </section>
-
       <div class="dashboard-grid">
         <div class="primary-column">
           <section class="panel scene-panel" aria-labelledby="scene-heading">
             <div class="panel-heading">
-              <div><p class="eyebrow">VISTA ISOMÉTRICA</p><h3 id="scene-heading">Proceso físico monitorizado</h3></div>
-              <div class="scene-tools"><span class="live-chip"><i></i> LIVE</span><button class="icon-button" id="reset-camera" type="button" title="Restablecer cámara" aria-label="Restablecer cámara">↺</button></div>
+              <div><p class="eyebrow">VISTA DE OPERACIÓN · GEMELO DIGITAL</p><h3 id="scene-heading">Estación de bombeo P-101</h3></div>
+              <div class="scene-tools"><span class="live-chip"><i></i> LIVE</span><button class="focus-button" id="focus-pump" type="button" aria-pressed="false" title="Acercar la bomba P-101">Inspeccionar P-101</button><button class="icon-button" id="reset-camera" type="button" title="Restablecer vista general" aria-label="Restablecer vista general">↺</button></div>
             </div>
             <div class="scene-wrap" id="scene-wrap">
-              <canvas id="plant-canvas" aria-label="Visualización 3D isométrica de planta de agua con tanque, bomba, tuberías y semáforo"></canvas>
+              <canvas id="plant-canvas" aria-label="Modelo 3D didáctico de tanque, bomba centrífuga, motor, tuberías y semáforo virtual"></canvas>
               <div class="scene-hud hud-tank"><span class="hud-kicker">TK-101 / NIVEL</span><strong id="scene-level">--%</strong><span class="hud-bar"><i id="scene-level-bar"></i></span></div>
               <div class="scene-hud hud-pump"><span class="hud-kicker">P-101 / BOMBA</span><strong id="scene-pump">--</strong><small id="scene-speed">-- Hz</small></div>
               <div class="scene-hud hud-help">ARRASTRA <b>ROTAR</b> · RUEDA <b>ZOOM</b></div>
+              <div class="scene-ident" id="scene-ident" hidden><strong>P-101 · bomba centrífuga didáctica</strong><span>Motor aleteado · acople protegido · voluta · descarga vertical</span></div>
             </div>
-            <div class="scene-caption"><span><i class="legend-line cyan"></i>Flujo de proceso</span><span><i class="legend-dot amber"></i>Instrumentación</span><span><i class="legend-dot red"></i>Alerta física</span><span class="caption-right">Modelo procedural · sin imágenes</span></div>
+            <div class="scene-caption"><span><i class="legend-line cyan"></i>Circuito hidráulico modelado</span><span><i class="legend-dot amber"></i>Instrumentación</span><span><i class="legend-dot red"></i>Alerta simulada</span><span class="caption-right">Geometría 3D didáctica · sin hardware físico</span></div>
           </section>
 
           <section class="telemetry-grid" aria-label="Telemetría operacional">
@@ -88,7 +82,7 @@
 
         <aside class="secondary-column">
           <section class="panel state-panel" aria-labelledby="state-heading">
-            <div class="panel-heading"><div><p class="eyebrow">ESTADO DEL SISTEMA</p><h3 id="state-heading">Indicadores físicos</h3></div><span class="state-severity" id="safety-badge">--</span></div>
+            <div class="panel-heading"><div><p class="eyebrow">ESTADO DEL GEMELO</p><h3 id="state-heading">Indicadores de proceso</h3></div><span class="state-severity" id="safety-badge">--</span></div>
             <div class="state-list">
               <div class="state-row"><div class="state-name"><span class="state-light green"></span><span>Seguridad de proceso</span></div><strong id="safety-state">--</strong></div>
               <div class="state-row"><div class="state-name"><span class="state-light" id="traffic-light"></span><span>Semáforo virtual</span></div><strong id="traffic-state">--</strong></div>
@@ -122,6 +116,13 @@
           </section>
         </aside>
       </div>
+
+      <section class="panel topology-panel" aria-labelledby="topology-heading">
+        <div class="panel-heading"><div><p class="eyebrow">ARQUITECTURA · ZONAS Y CONDUCTOS</p><h3 id="topology-heading">Mapa de red de la práctica</h3></div><span class="live-chip" id="topology-status">Docker / aislado</span></div>
+        <div class="topology" id="topology"><p class="empty-inline">Cargando nodos…</p></div>
+        <div class="topology-flows" id="topology-flows"></div>
+        <p class="map-note">Topología declarada en Compose; líneas de protocolo resaltadas solo al observar payload en el PCAP. El outstation DNP3 comparte el espacio de red de <code>plant</code> (no es un host IP separado).</p>
+      </section>
 
       <section class="bottom-grid" aria-label="Historial y análisis">
         <section class="panel history-panel" aria-labelledby="history-heading"><div class="panel-heading"><div><p class="eyebrow">OBSERVABILIDAD</p><h3 id="history-heading">Banda de eventos histórica</h3></div><div class="history-meta"><span id="event-count">0 eventos</span><span class="history-key"><i class="key-dot normal"></i>normal <i class="key-dot warning"></i>aviso <i class="key-dot critical"></i>crítico</span></div></div><div class="event-band" id="event-band" role="img" aria-label="Banda de severidad de los eventos históricos"><span class="empty-band">Sin eventos registrados</span></div><div class="timeline-labels"><span>− 60 min</span><span>ahora</span></div></section>

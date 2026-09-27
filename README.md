@@ -4,7 +4,7 @@
 
 > **Uso legal y defensivo exclusivamente.** Ejecute esto únicamente en una máquina de enseñanza aislada y autorizada. No conecte el laboratorio a una red OT, PLC, RTU, SIS o infraestructura externa. No publique los puertos 502/TCP, 4840/TCP ni 20000/TCP; no cambie los destinos internos fijos. Los comandos de práctica son una lista blanca de operaciones sobre la maqueta: no hay inyección de bytes arbitrarios, escaneo, DoS, ARP spoofing ni exploit listo para terceros. `SecurityPolicy None` de OPC UA, el token de ejemplo y las reglas simplificadas son debilidades **intencionadas solo para enseñar**, nunca configuraciones de producción.
 
-![Una de las cuatro pantallas de práctica, con mapa lógico y proceso 3D](docs/workspaces-preview.png)
+![Laboratorio Modbus: consola SCADA clara, telemetría y bomba P-101](docs/preview-02-modbus.png)
 
 ## Arranque en un comando
 
@@ -30,10 +30,16 @@ La única publicación del Compose es **`127.0.0.1:8080 → plant:8000`**. Si el
 
 La raíz `/` abre la primera práctica. **Las pantallas son independientes, pero la maqueta Docker es compartida**: ejecute *Restablecer* antes de cada práctica/alumno. El reset vuelve al estado nominal (45 Hz, señal verde); **no borra** eventos ni PCAP. Las casillas de los pasos son **autoevaluación local del alumno**, no una nota automática. Exporte la bitácora JSON y guarde el PCAP para comparar dos fuentes independientes.
 
+### Interfaz de operación e inspección mecánica
+
+La consola utiliza una **paleta empresarial clara**, tarjetas de telemetría de alto contraste y un acento discreto propio de cada práctica. La vista del proceso aparece antes del [mapa ampliado](docs/preview-network.png): el operador observa primero el estado, luego traza el conducto Docker y examina el PCAP, las alertas, los pasos y la matriz MITRE. El comparador MBAP/PDU aparece solo en Modbus. Está adaptada a escritorio y móvil. Capturas verificadas: [línea base](docs/preview-01-baseline.png), [Modbus](docs/preview-02-modbus.png), [OPC UA](docs/preview-03-opcua.png), [DNP3](docs/preview-04-dnp3.png) y [pantalla móvil](docs/preview-mobile.png).
+
+En cualquier práctica, pulse **«Inspeccionar P-101»** para acercarse a la [bomba centrífuga modelada](docs/preview-pump-focus.png); **«Vista general»**, **↺** o doble clic devuelve la planta completa. El modelo procedural representa una **bomba horizontal de aspiración axial y descarga vertical** con voluta/bridas atornilladas, motor eléctrico aleteado, ventilador, acople protegido, bancada, válvula y manómetro. El tubo de aspiración sale del tanque y la descarga conduce a la salida de proceso; no hay un retorno hidráulico ficticio. La animación de ventilador/flujo solo aparece con la bomba encendida y velocidad positiva. **No es un CAD de fabricante**, ni modela curva Q-H, rendimiento, presión, inercia, cavitación o tiempos físicos de una bomba: setpoint, temperatura, caudal y nivel pertenecen al gemelo matemático didáctico. Los cambios mostrados después de Modbus/OPC UA/DNP3 provienen del estado de la maqueta y se contrastan con protocolos y PCAP, nunca de un equipo físico.
+
 ## Cómo se sigue una práctica
 
 1. Abra la URL de su laboratorio. Lea objetivos y límites, observe la **topología lógica** de nodos y conductos; un enlace se resalta al ver payload capturado en el puerto correspondiente, no por el mero hecho de estar dibujado.
-2. Restablezca y registre el estado inicial en la vista SCADA/3D. La HMI muestra nivel `TK-101`, bomba `P-101`, temperatura, caudal, señal y cartel. No es un equipo físico.
+2. Restablezca y registre el estado inicial en la vista SCADA/3D. Pulse **Inspeccionar P-101** si desea examinar el motor, el acople y la voluta antes/después. La HMI muestra nivel `TK-101`, bomba `P-101`, temperatura, caudal, señal y cartel. No es un equipo físico.
 3. Siga los pasos de la pantalla o su guía. Los botones predefinidos y el **constructor de comando OT** tienen destinos fijos: Modbus FC03/FC06 en `plant:502`, OPC UA Write en `plant:4840`, DNP3 Direct Operate en `plant:20000`. Rango FC06/OPC UA: 30–95 en el setpoint didáctico; DNP3 solo 0/1/2. El backend impone una pausa de 1,5 s entre comandos del mismo laboratorio.
 4. En **Paquetes reales**, seleccione un paquete, compare IP/puertos/hex y descargue el último segmento PCAP. El sensor `tcpdump` está en otro contenedor y captura Ethernet en el conducto de control; el lector web **no reensambla TCP ni descifra OPC UA**. Para analizar completamente use Wireshark/Tshark.
 5. Distinga el **log de aplicación** de una firma **`engine: Suricata`** y de los bytes PCAP. `OT-ANOMALY` es una alerta analítica del gemelo; las reglas DNP3 y OPC UA indican presencia de solicitud/HEL, **no** certifican que detectaron una orden o un Write.

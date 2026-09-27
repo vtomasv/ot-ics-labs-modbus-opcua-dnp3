@@ -28,17 +28,18 @@ function renderMap(lab, packets = []) {
   const ports = new Set(packets.map(packet => Number(packet.dst_port) || Number(packet.src_port)));
   const nodes = Array.isArray(lab.nodes) ? lab.nodes : [];
   const links = Array.isArray(lab.links) ? lab.links : [];
-  const positions = {browser:[20,65],scada3d:[20,65],trainer:[310,65],plant:[600,65],dnp3:[890,65],suricata:[310,225],sensor:[600,225]};
+  const positions = {browser:[20,20],scada3d:[20,20],trainer:[310,20],plant:[600,20],dnp3:[890,20],suricata:[310,180],sensor:[600,180]};
+  const offset = nodes.some(node => node.id === 'dnp3') ? 0 : 145;
   const svgLinks = links.map(link => {
     const from = positions[link.from], to = positions[link.to]; if (!from || !to) return '';
     const observed = Number.isFinite(Number(link.port)) && ports.has(Number(link.port));
-    return `<line x1="${from[0]+105}" y1="${from[1]+35}" x2="${to[0]+105}" y2="${to[1]+35}" class="network-edge ${observed ? 'observed' : ''}" marker-end="url(#arrow)" />`;
+    return `<line x1="${from[0]+offset+105}" y1="${from[1]+35}" x2="${to[0]+offset+105}" y2="${to[1]+35}" class="network-edge ${observed ? 'observed' : ''}" marker-end="url(#arrow)" />`;
   }).join('');
   const svgNodes = nodes.map((node, index) => {
-    const [x,y] = positions[node.id] || [20+index*180,225];
-    return `<g class="network-node" transform="translate(${x},${y})"><title>${escape(node.label)} — ${escape(node.role)} — ${escape(node.zone)}</title><rect width="210" height="70" rx="6"/><text x="14" y="21" class="network-zone">${escape(String(node.zone).slice(0,28))}</text><text x="14" y="45" class="network-label">${escape(String(node.label).slice(0,28))}</text></g>`;
+    const [x,y] = positions[node.id] || [20+index*180,180];
+    return `<g class="network-node" transform="translate(${x+offset},${y})"><title>${escape(node.label)} — ${escape(node.role)} — ${escape(node.zone)}</title><rect width="210" height="70" rx="6"/><text x="14" y="21" class="network-zone">${escape(String(node.zone).slice(0,28))}</text><text x="14" y="45" class="network-label">${escape(String(node.label).slice(0,28))}</text></g>`;
   }).join('');
-  const diagram = `<svg class="network-svg" viewBox="0 0 1120 325" role="img" aria-label="Nodos Docker y enlaces lógicos de la práctica"><defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,1 L7,4 L0,7" fill="none" stroke="#72a8ad" stroke-width="1.5"/></marker></defs>${svgLinks}${svgNodes}</svg>`;
+  const diagram = `<svg class="network-svg" viewBox="0 0 1120 265" role="img" aria-label="Nodos Docker y enlaces lógicos de la práctica"><defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,1 L7,4 L0,7" fill="none" stroke="#7691aa" stroke-width="1.5"/></marker></defs>${svgLinks}${svgNodes}</svg>`;
   const cards = `<div class="network-cards">${nodes.map(node => `<article class="topology-node"><span class="node-zone">${escape(node.zone)}</span><strong>${escape(node.label)}</strong><small>${escape(node.role)}</small></article>`).join('')}</div>`;
   $('topology').innerHTML = nodes.length ? diagram + cards : '<p>Sin nodos declarados.</p>';
   $('topology-flows').innerHTML = links.map(link => {
@@ -150,6 +151,7 @@ async function exportEvidence() {
   link.download = `evidencia-${activeId}.json`; link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 2000);
 }
 export async function initLabWorkspace({runAction}) {
+  document.body.dataset.lab = activeId;
   const [catalog, lab] = await Promise.all([api('/api/labs'), api(`/api/labs/${activeId}`)]);
   currentLab = lab;
   renderNav(catalog.labs || []);
@@ -162,6 +164,7 @@ export async function initLabWorkspace({runAction}) {
   renderSteps(lab);
   renderMatrix(lab);
   renderInjection(lab);
+  $('frame-panel').hidden = activeId !== '02-modbus';
   document.querySelectorAll('.scenario-button').forEach(button => { button.hidden = !lab.allowed_actions.includes(button.dataset.scenario); });
   const allowedCount = document.querySelectorAll('.scenario-button:not([hidden])').length;
   $('scenario-counter').textContent = `0/${allowedCount}`;
