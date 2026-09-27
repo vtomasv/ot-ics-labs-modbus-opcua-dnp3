@@ -58,23 +58,6 @@ async def run_modbus(context: LabContext):
                               address=("0.0.0.0", 502))
 
 
-class ChangeHandler:
-    def __init__(self, speed_node, signal_node):
-        self.speed_node = speed_node.nodeid
-        self.signal_node = signal_node.nodeid
-
-    async def datachange_notification(self, node, val, _data):
-        if node.nodeid == self.speed_node and int(val) != plant.state.speed_setpoint:
-            plant.emit("OPC UA", "cliente → servidor", f"Write Planta/SpeedSetpoint = {val}", "high")
-            plant.command("OPC UA", "speed", int(val))
-        elif node.nodeid == self.signal_node and int(val) != plant.state.traffic_signal:
-            plant.emit("OPC UA", "cliente → servidor", f"Write Planta/TrafficSignal = {val}", "warning")
-            plant.command("OPC UA", "signal", int(val))
-
-    def event_notification(self, _event):
-        pass
-
-
 async def run_opcua():
     server = Server()
     await server.init()
@@ -89,25 +72,35 @@ async def run_opcua():
     level = await obj.add_variable(idx, "TankLevel", float(plant.state.tank_level))
     signal = await obj.add_variable(idx, "TrafficSignal", int(plant.state.traffic_signal))
     await signal.set_writable()
-    handler = ChangeHandler(setpoint, signal)
-    sub = None
+    # Track the last value mirrored into the OPC UA node. A server-side sync
+    # after Modbus/DNP3/reset must NOT be interpreted as an external OPC UA
+    # Write; an asynchronous subscription callback caused exactly that race.
+    last_speed = int(plant.state.speed_setpoint)
+    last_signal = int(plant.state.traffic_signal)
     await server.start()
     LOG.info("OPC UA disponible en 4840; namespace %s, nodos Planta/*", idx)
     try:
-        sub = await server.create_subscription(500, handler)
-        await sub.subscribe_data_change([setpoint, signal])
         while True:
             s = plant.state
-            # Las escrituras de servidor generan notificación, pero el callback solo reacciona a un valor divergente.
-            if await setpoint.read_value() != s.speed_setpoint:
+            node_speed = int(await setpoint.read_value())
+            node_signal = int(await signal.read_value())
+            if node_speed != last_speed:
+                plant.emit("OPC UA", "cliente → servidor", f"Write Planta/SpeedSetpoint = {node_speed}", "high")
+                plant.command("OPC UA", "speed", node_speed)
+                last_speed = node_speed
+            elif s.speed_setpoint != last_speed:
                 await setpoint.write_value(int(s.speed_setpoint))
-            if await signal.read_value() != s.traffic_signal:
+                last_speed = int(s.speed_setpoint)
+            if node_signal != last_signal:
+                plant.emit("OPC UA", "cliente → servidor", f"Write Planta/TrafficSignal = {node_signal}", "warning")
+                plant.command("OPC UA", "signal", node_signal)
+                last_signal = node_signal
+            elif s.traffic_signal != last_signal:
                 await signal.write_value(int(s.traffic_signal))
+                last_signal = int(s.traffic_signal)
             await level.write_value(float(s.tank_level))
-            await asyncio.sleep(1)
+            await asyncio.sleep(0.2)
     finally:
-        if sub:
-            await sub.delete()
         await server.stop()
 
 

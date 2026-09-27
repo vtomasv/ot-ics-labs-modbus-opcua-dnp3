@@ -1,21 +1,17 @@
-# Mapeo de observables del laboratorio
+# MITRE ATT&CK for ICS e IEC 62443: mapa de las cuatro prácticas
 
-Esta tabla asocia comportamientos **simulados** con técnicas de [MITRE ATT&CK for ICS](https://attack.mitre.org/matrices/ics/). El identificador técnico describe una conducta, no atribuye una campaña real. Los requisitos IEC 62443 son una guía de diseño; la maqueta no certifica un **SL-A**. **SL-T** expresa la meta por zona o conducto tras evaluar riesgos, y puede variar por requisito fundamental. [1]
+El mapeo describe **conductas técnicas representadas** por alumnos autorizados en una maqueta de software. **No implica adversario, intrusión, atribución, nivel de seguridad IEC 62443 ni cumplimiento legal**. Consulte el alcance, la evidencia y los límites específicos de cada [laboratorio 01](labs/01-baseline.md), [02](labs/02-modbus.md), [03](labs/03-opcua.md) y [04](labs/04-dnp3.md).
 
-| Evidencia verificable | Técnica, táctica y alcance | IEC 62443 / diseño compensatorio | Métrica sugerida |
+| Laboratorio / observable realmente disponible | MITRE ATT&CK for ICS y alcance exacto | Control IEC 62443 conceptual | Evidencia mínima independiente |
 |---|---|---|---|
-| FC03 y mapa de flujo | T0842 Network Sniffing, **riesgo a discutir**; no se presupone intrusión por una lectura | FR5 restringe conductos, FR6 monitoriza eventos | % de flujos Modbus inventariados |
-| FC06 registra 45→85 Hz | T0836 Modify Parameter; Impair Process Control [2] | FR1 autenticación, FR2 autorización, FR3 integridad, FR6 respuesta | Tiempo desde escritura a alerta confirmada |
-| Proxy fijo registra `2D`→`5A` | T0830 Adversary-in-the-Middle, analogía **solo de integridad del mensaje** | FR3 protección, FR5 origen permitido | % de cambios fuera de rango rechazados |
-| Nodo OPC UA acepta `Write` sin cifrado | T0836 como comportamiento final, no una propiedad inherente a OPC UA | FR1–FR4: certificados, roles, firma y confidencialidad | % de endpoints sin política `None` |
-| Master DNP3 cambia luz verde→roja | T0831 Manipulation of Control; Impact [3] | FR2, FR3, FR5, FR6; control del conducto y validación independiente | Latencia de correlación trama/estado físico |
-| Medida HMI difiere de sensor fuera de banda | T0832 Manipulation of View, **solo un ejercicio de análisis** | FR3, FR6, FR7: verificación y continuidad | Tiempo para confirmar origen del dato |
+| 01 · cliente autorizado lee siete holding registers, FC03 | [T0801 Monitor Process State](https://attack.mitre.org/techniques/T0801/) / Collection **como analogía**: una lectura legítima no es indicio de ataque | FR2 control de uso; FR5 flujos; FR6 respuesta a eventos | Solicitud/respuesta FC03 en PCAP + estado o log de aplicación |
+| 01 · sensor pasivo de aula observa su interfaz | [T0842 Network Sniffing](https://attack.mitre.org/techniques/T0842/) / analogía didáctica; el sensor **no es un atacante** | FR1 identidad de operadores del sensor; FR5 conductos; FR6 monitoreo | PCAP y, si la regla dispara, EVE de Suricata |
+| 02 · FC06 cambia registro 2 de 45 a 85/90 Hz | [T0836 Modify Parameter](https://attack.mitre.org/techniques/T0836/) / Impair Process Control, conducta representada sin atribución | FR1 identidad, FR2 autorización, FR3 integridad, FR5 flujo, FR6 respuesta | Petición/respuesta FC06 en PCAP + `speed_setpoint`/vista 3D + firma FC06 si está presente |
+| 03 · Write OPC UA a `Planta/SpeedSetpoint=75` | [T0836 Modify Parameter](https://attack.mitre.org/techniques/T0836/) / analogía técnica de cambio de parámetro, **no** propiedad inevitable de OPC UA | FR1–FR4 certificados, roles, firma y confidencialidad; FR5/FR6 | TCP/4840 en PCAP + Read del nodo + API/vista; HEL de Suricata **no prueba Write** |
+| 04 · Direct Operate DNP3 salida analógica 0, readback y señal virtual roja | [T0831 Manipulation of Control](https://attack.mitre.org/techniques/T0831/) / Impact, conducta controlada sin proceso físico | FR2 autorización, FR3 autenticidad y verificación, FR5 conducto, FR6 respuesta | Solicitud/respuesta en PCAP 20000 + master/readback + estado del gemelo; firma de cabecera **no prueba control** |
 
-Este mapeo se refiere solo a los paquetes y estados verificables de la maqueta. Consulte la matriz actual de MITRE al interpretar los identificadores, porque sus técnicas y tácticas pueden cambiar. **Una lectura legítima no demuestra intrusión** y el proxy de una trama no demuestra intercepción de terceros. [4]
+**Exclusiones deliberadas:** el escenario `intercept` prepara dos ADU Modbus para comparar integridad y envía solamente la versión alterada al destino fijo `plant:502`. **No** asignamos [T0830 Adversary-in-the-Middle](https://attack.mitre.org/techniques/T0830/) como conducta observada: no intercepta un flujo tercero ni altera rutas/ARP. Tampoco asignamos Manipulation of View por mostrar una HMI que refleja fielmente el estado del gemelo; el semáforo y la bomba virtual son simulación, no hardware.
 
-## Referencias
+Use métricas reproducibles: tiempo entre paquete FC06 y alerta Suricata **si existe**, diferencia entre setpoint solicitado y readback, % de comandos fuera de rango rechazados, recuento de flujos inventariados y tiempo de retorno a línea base. Especifique fuente, intervalo y ausencia de evidencia; **SL-T** es objetivo de diseño definido por análisis de riesgos y **SL-A** debe evaluarse en el sistema real, no por un botón verde del laboratorio. [Referencia IEC 62443](https://syc-se.iec.ch/deliveries/cybersecurity-guidelines/security-standards-and-best-practices/iec-62443/).
 
-[1]: https://syc-se.iec.ch/deliveries/cybersecurity-guidelines/security-standards-and-best-practices/iec-62443/ "IEC 62443 Foundational Requirements and security levels"
-[2]: https://attack.mitre.org/techniques/T0836/ "MITRE ATT&CK ICS T0836: Modify Parameter"
-[3]: https://attack.mitre.org/techniques/T0831/ "MITRE ATT&CK ICS T0831: Manipulation of Control"
-[4]: https://attack.mitre.org/tactics/ics/ "MITRE ATT&CK ICS Tactics"
+La [Ley chilena 21.663](https://www.bcn.cl/leychile/navegar?idNorma=1202434) aporta contexto de gestión y reporte para sujetos obligados; este repositorio no determina su aplicabilidad, plazos o sanciones para una organización concreta. En una práctica de notificación, el instructor debe revisar el texto oficial vigente y sus reglamentos antes de fijar tiempos.

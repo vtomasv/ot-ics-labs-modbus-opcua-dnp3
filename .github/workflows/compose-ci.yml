@@ -31,10 +31,15 @@ jobs:
           test "$(docker compose config --format json | jq -r '.services.plant.platform')" = linux/amd64
           test "$(docker compose config --format json | jq -r '.services.trainer.platform')" = linux/amd64
           test "$(docker compose config --format json | jq -r '.services.dnp3.platform')" = linux/amd64
+          test "$(docker compose config --format json | jq -r '.services.sensor.platform')" = linux/amd64
       - name: Build and start the isolated plant
         run: docker compose up -d
       - name: Verify all four protocol scenarios and IDS
         run: bash scripts/verify-lab.sh
+      - name: Verify four guided workspaces, capture and allowlists
+        run: python3 scripts/verify-workspaces.py
+      - name: Unit tests for twin and PCAP dissection
+        run: docker compose exec -T plant python -m unittest discover -s app/tests
       - name: Verify DNP3 outstation and master framing
         run: |
           docker compose exec -T dnp3 python /lab/dnp3/smoke.py
@@ -42,5 +47,5 @@ jobs:
       - name: Stop services without deleting evidence
         if: always()
         run: |
-          docker compose logs --tail=80 plant trainer dnp3 suricata || true
+          docker compose logs --tail=80 plant trainer dnp3 suricata sensor || true
           docker compose down || true

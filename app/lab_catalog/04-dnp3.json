@@ -1,0 +1,199 @@
+{
+  "id": "04-dnp3",
+  "number": 4,
+  "title": "Control DNP3 de señal",
+  "protocol": "DNP3/TCP",
+  "subtitle": "Control de salida analógica y lectura de retorno sobre una maqueta 3D aislada",
+  "summary": "El alumno ejecuta una operación DNP3 real entre el maestro nativo del contenedor trainer y el outstation OpenDNP3 del contenedor dnp3, ambos en la red Docker interna control. La operación fija la salida analógica índice 0 a 0 y exige una respuesta DNP3 válida y una lectura de retorno igual a 0. El semáforo rojo, la vista SCADA/3D y los eventos son representaciones del gemelo digital; el navegador no se conecta directamente al outstation y sus bytes HTTP no deben atribuirse al PCAP DNP3.",
+  "duration": "45 minutos",
+  "objectives": [
+    "Distinguir una orden DNP3/TCP de control, su respuesta y una lectura DNP3 de retorno, sin inferir intención maliciosa solo por la presencia del preámbulo 05 64.",
+    "Correlacionar el valor solicitado, el valor observado por DNP3 y el estado del semáforo virtual usando fuentes independientes: PCAP, respuesta del master, API/estado y eventos de la maqueta.",
+    "Usar tshark para filtrar TCP/20000 y revisar payloads DNP3 sin atribuir bytes de la interfaz web al PCAP.",
+    "Relacionar la conducta representada con MITRE ATT&CK for ICS T0831 de forma acotada y separar la observación didáctica de una intrusión real o de una atribución.",
+    "Proponer controles conceptuales alineados con IEC 62443 FR2, FR3, FR5 y FR6, sin afirmar certificación ni nivel de seguridad.",
+    "Mantener el laboratorio aislado, usar únicamente los destinos fijos del Compose y limitar las acciones a dnp3-signal y reset."
+  ],
+  "nodes": [
+    {
+      "id": "trainer",
+      "label": "trainer / maestro DNP3",
+      "role": "Operador de escenarios y cliente DNP3 nativo",
+      "zone": "control Docker interna"
+    },
+    {
+      "id": "dnp3",
+      "label": "dnp3 / outstation OpenDNP3",
+      "role": "Estación remota DNP3 que despacha la salida y publica la medida de retorno",
+      "zone": "namespace de plant / control emulado"
+    },
+    {
+      "id": "plant",
+      "label": "plant / gemelo digital y API",
+      "role": "Proceso simulado, API interna y servidor de observabilidad",
+      "zone": "control y visualización emuladas"
+    },
+    {
+      "id": "scada3d",
+      "label": "Navegador / consola SCADA-3D",
+      "role": "Visualización local y disparo de acciones predefinidas; no es el maestro DNP3",
+      "zone": "dashboard de anfitrión, loopback"
+    },
+    {
+      "id": "suricata",
+      "label": "suricata",
+      "role": "Sensor pasivo del namespace de plant; genera EVE JSON, no reemplaza un PCAP",
+      "zone": "namespace de plant"
+    },
+    {
+      "id": "sensor",
+      "label": "sensor / tcpdump",
+      "role": "captura pasiva Ethernet a PCAP rotativo; sin puerto publicado",
+      "zone": "namespace de plant / interfaz hacia trainer"
+    }
+  ],
+  "links": [
+    {
+      "from": "trainer",
+      "to": "dnp3",
+      "protocol": "DNP3/TCP",
+      "port": 20000
+    },
+    {
+      "from": "dnp3",
+      "to": "plant",
+      "protocol": "HTTP interno outstation-gemelo",
+      "port": 8000
+    },
+    {
+      "from": "scada3d",
+      "to": "plant",
+      "protocol": "HTTP/JSON API de dashboard",
+      "port": 8080
+    },
+    {
+      "from": "trainer",
+      "to": "plant",
+      "protocol": "Modbus/TCP FC03 de línea base, no DNP3 periódico",
+      "port": 502
+    },
+    {
+      "from": "trainer",
+      "to": "suricata",
+      "protocol": "observación pasiva de la interfaz de control",
+      "port": null
+    },
+    {
+      "from": "plant",
+      "to": "sensor",
+      "protocol": "observación pasiva de 502, 4840 y 20000",
+      "port": null
+    }
+  ],
+  "steps": [
+    {
+      "title": "Aislar y restablecer",
+      "action": "reset",
+      "command": "docker compose exec -T plant python -c 'import urllib.request; r=urllib.request.Request(\"http://127.0.0.1:8000/api/scenario/reset\", method=\"POST\"); print(urllib.request.urlopen(r).read().decode())'",
+      "observation": "La respuesta confirma el reinicio y el estado nominal debe mostrar traffic_signal=2 (verde), speed_setpoint=45 y safety_trip=false. La práctica se ejecuta solo en Docker local; no se publican 502/TCP, 4840/TCP ni 20000/TCP.",
+      "packet": "No se atribuye un paquete DNP3 a reset: reset es una operación de API del laboratorio y no una orden DNP3.",
+      "evidence": "Salida del comando, /api/state y captura de la vista nominal verde.",
+      "criterion": "Entorno comprobablemente aislado y estado nominal registrado antes de controlar."
+    },
+    {
+      "title": "Obtener la medida DNP3 inicial",
+      "action": null,
+      "command": "docker compose exec -T trainer python /lab/dnp3/native_master.py observe",
+      "observation": "El master se conecta al destino fijo plant:20000 y lee el analog input índice 0. La salida JSON identifica protocol=DNP3, operation=observe y value=2 en línea base; es una lectura puntual, no tráfico DNP3 periódico.",
+      "packet": "Identificar la solicitud de lectura y su respuesta en TCP/20000; no usar solo 05 64 como prueba de control.",
+      "evidence": "JSON del master y, si se captura, frame/stream TCP correspondiente.",
+      "criterion": "La medida inicial queda registrada y se distingue de la lectura FC03 Modbus periódica."
+    },
+    {
+      "title": "Ejecutar control DNP3 de señal",
+      "action": "dnp3-signal",
+      "command": "docker compose exec -T trainer python /lab/dnp3/native_master.py signal 0",
+      "observation": "El master emite la operación de salida analógica índice 0 con valor 0, valida la respuesta DNP3 y vuelve a leer el analog input índice 0 hasta observar 0. El outstation llama a la API interna del gemelo para actualizar el semáforo virtual.",
+      "packet": "Buscar el flujo TCP/20000 del master al outstation y la respuesta inversa. La implementación usa una trama DNP3 con preámbulo 05 64, CRC DNP por bloque, Direct Operate de Group 41 Variation 1 y una lectura de Group 30 Variation 1; no presentar bytes no extraídos del PCAP como si fueran evidencia.",
+      "evidence": "Salida del master con status=VERIFIED_BY_DNP3_READBACK, evento DNP3 del panel y PCAP del flujo TCP/20000.",
+      "criterion": "Se demuestra una orden DNP3 real al destino fijo, respuesta válida y readback 0; no basta con una alerta heurística."
+    },
+    {
+      "title": "Correlacionar con la vista SCADA/3D",
+      "action": null,
+      "command": "docker compose exec -T plant python -c 'import urllib.request; print(urllib.request.urlopen(\"http://127.0.0.1:8000/api/state\").read().decode())'",
+      "observation": "La API devuelve traffic_signal=0 y la consola local muestra el semáforo virtual en rojo. Es una representación software del gemelo, no una observación física ni un PLC/SIS. El panel de eventos es una fuente de aplicación separada del PCAP.",
+      "packet": "No atribuir una solicitud HTTP del navegador ni el JSON de /api/state a bytes del PCAP DNP3; la captura se filtra por TCP/20000.",
+      "evidence": "JSON de estado, captura antes/después de la vista 3D y evento DNP3 con su timestamp.",
+      "criterion": "La tabla de correlación distingue representación visual, respuesta del protocolo y evidencia independiente."
+    },
+    {
+      "title": "Capturar y filtrar tráfico",
+      "action": null,
+      "command": null,
+      "observation": "Para una captura centrada en este laboratorio, use tcpdump dentro de plant mientras ejecuta dnp3-signal y guarde el archivo en pcaps/04-dnp3.pcap. No ejecute baseline-capture.sh aquí: solo consúltelo como referencia de que la línea base es Modbus FC03 y de que su captura multi-protocolo mezcla escenarios ajenos.",
+      "packet": "Con tshark filtre tcp.port == 20000, confirme handshake TCP y segmentos con payload, y compare dirección, stream, longitud y contenido DNP3. Use -x o data.data solo para bytes que realmente estén en el archivo.",
+      "evidence": "pcaps/04-dnp3.pcap, sha256sum del archivo, salida tshark y, opcionalmente, logs EVE como evidencia separada.",
+      "criterion": "El PCAP es verificable y el informe separa captura de red, logs de aplicación y alerta analítica."
+    },
+    {
+      "title": "Aplicar matriz MITRE/IEC y contención",
+      "action": null,
+      "command": null,
+      "observation": "Clasifique el control representado bajo T0831 solo como conducta del escenario, mapee FR2/FR3/FR5/FR6 conceptualmente y proponga limitar el origen autorizado, preservar supervisión, revisar el log del master y validar el punto en el outstation antes de reabrir una vía.",
+      "packet": "Una lectura legítima, un CRC correcto o la firma heurística OT no prueban por sí solos una intrusión, intercepción transparente o intención adversaria.",
+      "evidence": "Matriz con evidencia, alcance, control propuesto y fuente oficial URL; lista de antipatrones detectados.",
+      "criterion": "El mapeo no inventa IDs, no reclama certificación IEC 62443 y la contención no dirige tráfico a activos externos."
+    },
+    {
+      "title": "Restablecer y cerrar evidencia",
+      "action": "reset",
+      "command": "docker compose exec -T plant python -c 'import urllib.request; r=urllib.request.Request(\"http://127.0.0.1:8000/api/scenario/reset\", method=\"POST\"); print(urllib.request.urlopen(r).read().decode())'",
+      "observation": "La señal vuelve a 2 (verde) en el gemelo. Conserve PCAP, hash, tabla y capturas antes de ejecutar docker compose down; no use down -v si necesita conservar volúmenes de evidencia.",
+      "packet": "Reset no debe describirse como una respuesta DNP3 ni como borrado de PCAP.",
+      "evidence": "Estado final y listado de artefactos con hashes.",
+      "criterion": "El entorno queda nominal, aislado y con evidencia reproducible preservada."
+    }
+  ],
+  "mitre": [
+    {
+      "tactic": "Impact",
+      "technique_id": "T0831",
+      "technique": "Manipulation of Control",
+      "scope": "Relación justificada únicamente para la conducta representada: una orden DNP3 de control cambia el punto de señal del gemelo. No es una afirmación de intrusión, adversario, campaña, intercepción ni atribución.",
+      "evidence": "PCAP TCP/20000 con solicitud y respuesta, salida del master con readback 0, evento DNP3 y estado traffic_signal=0. La técnica oficial contempla cambios de parámetros o comandos de control; el laboratorio representa esa acción de forma benigna y autorizada.",
+      "mitigation": "Como diseño de defensa, estudiar autenticidad de comunicaciones (M0802) y validación fuera de banda (M0810) de MITRE, además de allowlist de origen, autorización por rol, límites de punto, registro y verificación independiente. La maqueta no implementa Secure Authentication.",
+      "source": "https://attack.mitre.org/techniques/T0831/"
+    }
+  ],
+  "iec": [
+    {
+      "reference": "IEC 62443 FR2 — Use control",
+      "application": "Mapeo conceptual: restringir quién puede emitir dnp3-signal, mantener un conducto de escritura mínimo, registrar la identidad y exigir aprobación/validación para una orden real. El botón y token de demostración del laboratorio no son control de acceso de producción."
+    },
+    {
+      "reference": "IEC 62443 FR3 — System integrity",
+      "application": "Mapeo conceptual: conservar integridad de la orden y de la configuración, validar respuesta y readback y detectar discrepancias. El CRC DNP detecta errores de trama; no equivale a autenticidad criptográfica. Proponer autenticación, control de cambios y validación independiente en producción."
+    },
+    {
+      "reference": "IEC 62443 FR5 — Restricted data flow",
+      "application": "Mapeo conceptual: la red control Docker es internal y 20000/TCP no se publica; el conducto permitido es trainer→outstation. Diseñar zonas/conductos, firewall/allowlist y una separación industrial real; este bridge de Compose no es una DMZ ni demuestra un Security Level."
+    },
+    {
+      "reference": "IEC 62443 FR6 — Timely response to events",
+      "application": "Mapeo conceptual: correlacionar evento del master, tráfico, readback y estado visual para alertar y contener; definir en un entorno real responsables, playbook, confirmación segura y canales fuera de banda. La maqueta no fija SLA ni demuestra cumplimiento."
+    }
+  ],
+  "limitations": [
+    "Es una maqueta 3D/software: no hay hardware PLC, RTU físico, actuador, semáforo público ni SIS certificado. La lógica de protección es un interlock del gemelo y no una función instrumentada de seguridad.",
+    "El outstation usa una implementación mínima y el master nativo soporta solo la transacción de este laboratorio, una segmentación de transporte y lecturas simples; no representa una pila DNP3 general ni valida equipos industriales.",
+    "No se implementa DNP3 Secure Authentication. El CRC DNP aporta detección de error, no autenticidad ni integridad criptográfica frente a un atacante.",
+    "El proxy Modbus de otros ejercicios envía una trama editada a plant:502 y no es un proxy transparente, MITM ni ARP spoofing; no debe atribuirse a este laboratorio DNP3.",
+    "El panel de eventos, el JSON de la API y las alertas Suricata son fuentes de observación distintas del PCAP. Los bytes del navegador no se presentan como bytes capturados en TCP/20000.",
+    "No se debe inventar tráfico periódico OPC UA o DNP3: el baseline del trainer explica FC03 Modbus periódico y el escenario explícito genera DNP3; OPC UA solo aparece si se ejecuta su escenario separado.",
+    "La relación MITRE T0831 describe una conducta representada y no prueba malicia, compromiso, técnica completa o atribución. T0806 no se asigna: esta práctica no repite sucesivamente valores de I/O.",
+    "El mapeo IEC 62443 es conceptual y educativo; no es una evaluación de riesgos, un Security Level, una certificación ni una declaración de conformidad.",
+    "La Ley chilena 21.663 se incluye solo como contexto general de ciberseguridad. Revise siempre el texto oficial vigente y asesoría competente; este laboratorio no determina sujetos obligados, plazos, multas ni cumplimiento legal.",
+    "Solo se permiten los escenarios dnp3-signal y reset para esta práctica y los destinos fijos internos del Compose. Nunca conecte el laboratorio a una red OT real ni cambie hosts, puertos o binds de loopback."
+  ]
+}

@@ -11,6 +11,8 @@ Todos los comandos del proyecto están limitados a `plant` en la red privada Doc
 | Proxy de trama Modbus | PDU FC06 preparada para `45`, enviada con valor `90` | Velocidad 90 Hz y comparación antes/después | **No** es MITM transparente ni ARP spoofing |
 | Restablecimiento | Endpoint interno devuelve valores de línea base | Bomba 45 Hz y señal verde | No borra histórico, PCAP ni volumen de evidencia |
 
+Cada pantalla incluye además un **constructor de comando acotado**: la práctica 01 emite solo una ADU Modbus FC03; la 02 prepara una ADU FC06 a registro 2 con valor 30–95 y valida el eco; la 03 usa un cliente OPC UA real para escribir y leer `Planta/SpeedSetpoint` entre 30–95; la 04 emite Direct Operate DNP3 a salida analógica índice 0 con valor 0/1/2 y exige readback. No hay campos de destino/puerto/bytes libres y la API limita la cadencia de comandos. Lo que se denomina «inyectar» aquí es **transmitir un mensaje permitido a un servidor Docker**, no una función de inyección de tramas arbitrarias ni una herramienta para redes externas.
+
 Use un PCAP para afirmar que observó una transacción de protocolo, `/api/state` para el estado simulado, y un registro `engine: Suricata` para afirmar que una **firma IDS** se activó. Un evento generado por la lógica de la planta no demuestra por sí mismo que el sensor pasivo haya visto el paquete. La tabla de [MITRE/IEC](mapping-mitre-ics.md) traduce estas evidencias a controles defensivos, sin atribuir campañas reales al tráfico simulado.
 
 El proxy solo permite comparar integridad de una orden preparada por el laboratorio. En una instalación OT genuina, cualquier cambio en límites, accesos y conductos requiere análisis de seguridad de proceso y coordinación con operaciones. [1]

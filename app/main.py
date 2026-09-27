@@ -4,6 +4,7 @@ import asyncio
 import json
 import os
 from pathlib import Path
+import time
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
@@ -12,6 +13,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from .core import plant
+from .capture import PORTS, current_capture, read_packets
+from .labs import LABS, ACTIONS, INJECTIONS, get_lab
 from .protocols import LabContext, run_protocols
 
 static = Path(__file__).parent / "static"
@@ -20,6 +23,8 @@ protocol_tasks = []
 SURICATA_EVE = Path(os.getenv("SURICATA_EVE", "/suricata/eve.json"))
 TRAINER_URL = "http://trainer:8100"
 LAB_TOKEN = os.getenv("LAB_TOKEN", "edu-lab-only")
+last_injection: dict[str, float] = {}
+injection_lock = asyncio.Lock()
 
 
 @asynccontextmanager
@@ -52,6 +57,12 @@ class Observation(BaseModel):
     frame_after: str | None = None
 
 
+class Injection(BaseModel):
+    protocol: str
+    operation: str
+    value: int | None = None
+
+
 @app.get("/api/health")
 def health():
     return {"ok": True, "protocols": {"modbus": 502, "opcua": 4840, "dnp3": 20000},
@@ -77,7 +88,38 @@ def events():
 
 @app.get("/api/traffic")
 def traffic():
-    return {"traffic": list(plant.traffic)[:100]}
+    return {"traffic": list(plant.traffic)[:100], "source": "Eventos de aplicación, NO paquetes capturados"}
+
+
+@app.get('/api/labs')
+def labs():
+    return {'labs': [{'id': lab_id, 'number': item['number'], 'title': item['title'],
+                      'protocol': item['protocol'], 'duration': item['duration']}
+                     for lab_id in LABS if (item := get_lab(lab_id)) is not None]}
+
+
+@app.get('/api/labs/{lab_id}')
+def lab(lab_id: str):
+    item = get_lab(lab_id)
+    if item is None:
+        raise HTTPException(404, 'Laboratorio no disponible')
+    return item
+
+
+@app.get('/api/packets')
+def packets(protocol: str | None = None, limit: int = 80):
+    if protocol is not None and protocol not in PORTS.values():
+        raise HTTPException(400, 'Protocolo fuera de lista blanca')
+    return read_packets(max(1, min(limit, 100)), protocol)
+
+
+@app.get('/api/capture/download')
+def download_capture():
+    path = current_capture()
+    if path is None:
+        raise HTTPException(503, 'Sensor aún no generó captura')
+    return FileResponse(path, media_type='application/vnd.tcpdump.pcap',
+                        filename='ot-ics-ultimo-segmento.pcap')
 
 
 @app.get("/api/alerts")
@@ -162,6 +204,55 @@ async def scenario(name: str):
     except (httpx.RequestError, httpx.HTTPStatusError, ValueError) as exc:
         raise HTTPException(503, f"El operador del laboratorio no completó el escenario: {exc}") from exc
     return result
+
+
+@app.post('/api/labs/{lab_id}/action/{name}')
+async def lab_action(lab_id: str, name: str):
+    if lab_id not in ACTIONS or name not in ACTIONS[lab_id]:
+        raise HTTPException(404, 'Acción no disponible en este laboratorio')
+    return await scenario(name)
+
+
+@app.post('/api/labs/{lab_id}/inject')
+async def lab_inject(lab_id: str, body: Injection):
+    if lab_id not in INJECTIONS or (body.protocol, body.operation) != INJECTIONS[lab_id]:
+        raise HTTPException(400, 'Inyección no autorizada para este laboratorio')
+    if body.operation == 'read' and body.value is not None:
+        raise HTTPException(400, 'FC03 no admite un valor de escritura')
+    if body.operation == 'write' and (body.value is None or not 30 <= body.value <= 95):
+        raise HTTPException(400, 'Valor fuera del intervalo didáctico 30..95')
+    if body.operation == 'signal' and body.value not in (0, 1, 2):
+        raise HTTPException(400, 'La salida simulada solo acepta 0, 1 o 2')
+    async with injection_lock:
+        now = time.monotonic()
+        if now - last_injection.get(lab_id, 0) < 1.5:
+            raise HTTPException(429, 'Espere 1,5 s entre comandos de práctica')
+        last_injection[lab_id] = now
+    try:
+        async with httpx.AsyncClient(timeout=19.0) as client:
+            response = await client.post(f'{TRAINER_URL}/inject', json=body.model_dump(),
+                                         headers={'x-lab-token': LAB_TOKEN})
+            response.raise_for_status()
+            return response.json()
+    except (httpx.RequestError, httpx.HTTPStatusError, ValueError) as exc:
+        raise HTTPException(503, f'Transacción OT no confirmada: {exc}') from exc
+
+
+@app.get('/labs/{lab_id}')
+def lab_page(lab_id: str):
+    if lab_id not in LABS:
+        raise HTTPException(404, 'Laboratorio no disponible')
+    return FileResponse(static / 'index.html')
+
+
+@app.get('/docs/labs/{lab_id}.md')
+def lab_guide(lab_id: str):
+    if lab_id not in LABS:
+        raise HTTPException(404, 'Guía no disponible')
+    path = Path(__file__).parent.parent / 'docs' / 'labs' / f'{lab_id}.md'
+    if not path.is_file():
+        raise HTTPException(404, 'Guía no disponible')
+    return FileResponse(path, media_type='text/markdown; charset=utf-8')
 
 
 @app.get("/")

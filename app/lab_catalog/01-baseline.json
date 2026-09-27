@@ -1,0 +1,236 @@
+{
+  "id": "01-baseline",
+  "number": 1,
+  "title": "Línea base y observabilidad OT",
+  "protocol": "Modbus/TCP, OPC UA y DNP3/TCP",
+  "subtitle": "Inventario de flujos, lectura FC03 y correlación de evidencia",
+  "summary": "Construir una línea base reproducible de la maqueta software: identificar el flujo FC03 del entrenador hacia plant:502, capturar tráfico generado explícitamente dentro de Docker y separar paquetes, eventos de aplicación, vista SCADA/3D y alertas IDS. El tráfico OPC UA y DNP3 no se presenta como periódico: aparece únicamente cuando un escenario del script de captura lo activa.",
+  "duration": "60-75 min",
+  "objectives": [
+    "Dibujar el conducto fijo trainer → plant y distinguir navegador, API, gemelo digital, outstation y sensor pasivo.",
+    "Reconocer en un PCAP una petición y respuesta Modbus FC03 de lectura de holding registers, sin confundirlas con FC06 de escritura.",
+    "Correlacionar PCAP, eventos JSON, panel SCADA/3D y EVE JSON sin tratar una fuente como sustituto de las otras.",
+    "Documentar qué tráfico fue generado por una acción explícita de laboratorio y qué observación no prueba actividad adversaria.",
+    "Proponer controles conceptuales IEC 62443 FR1–FR7 y una relación MITRE ATT&CK for ICS justificada, sin afirmar certificación ni atribución."
+  ],
+  "nodes": [
+    {
+      "id": "browser",
+      "label": "Navegador anfitrión 127.0.0.1:8080",
+      "role": "SCADA/HMI y visualización Three.js",
+      "zone": "dashboard/loopback; fuera del conducto control"
+    },
+    {
+      "id": "plant",
+      "label": "plant",
+      "role": "API, gemelo digital, servidor Modbus y servidor OPC UA",
+      "zone": "control; plant namespace"
+    },
+    {
+      "id": "trainer",
+      "label": "trainer",
+      "role": "cliente/maestro controlado; FC03 y escenarios explícitos",
+      "zone": "control; red Docker internal"
+    },
+    {
+      "id": "dnp3",
+      "label": "dnp3 outstation",
+      "role": "estación remota DNP3 software",
+      "zone": "plant namespace compartido"
+    },
+    {
+      "id": "suricata",
+      "label": "suricata",
+      "role": "sensor pasivo y EVE JSON",
+      "zone": "plant namespace; copia de ruta control"
+    },
+    {
+      "id": "sensor",
+      "label": "sensor / tcpdump",
+      "role": "captura pasiva Ethernet a PCAP rotativo; sin puerto publicado",
+      "zone": "namespace de plant / interfaz hacia trainer"
+    }
+  ],
+  "links": [
+    {
+      "from": "browser",
+      "to": "plant",
+      "protocol": "HTTP local",
+      "port": 8080
+    },
+    {
+      "from": "trainer",
+      "to": "plant",
+      "protocol": "Modbus/TCP",
+      "port": 502
+    },
+    {
+      "from": "trainer",
+      "to": "plant",
+      "protocol": "OPC UA/TCP",
+      "port": 4840
+    },
+    {
+      "from": "trainer",
+      "to": "plant",
+      "protocol": "DNP3/TCP",
+      "port": 20000
+    },
+    {
+      "from": "trainer",
+      "to": "suricata",
+      "protocol": "copia pasiva de tráfico control",
+      "port": null
+    },
+    {
+      "from": "plant",
+      "to": "sensor",
+      "protocol": "observación pasiva de 502, 4840 y 20000",
+      "port": null
+    }
+  ],
+  "steps": [
+    {
+      "title": "Arrancar y volver a línea base",
+      "action": "reset",
+      "command": "docker compose up -d && docker compose ps",
+      "observation": "plant y trainer deben quedar healthy; dnp3 y suricata running. El reset devuelve el gemelo a su estado nominal software.",
+      "packet": "No se atribuye un paquete industrial al clic de reset; es una acción de API y estado.",
+      "evidence": "Salida de docker compose ps, GET /api/health y captura de la vista SCADA/3D.",
+      "criterion": "El alumno registra destinos fijos y no expone 502/TCP, 4840/TCP ni 20000/TCP al anfitrión."
+    },
+    {
+      "title": "Generar lecturas FC03 controladas",
+      "action": null,
+      "command": "docker compose exec -T trainer python /lab/scripts/generate-traffic.py --count 5",
+      "observation": "El cliente fijo plant:502 solicita 7 holding registers desde dirección PDU 0. El trainer también mantiene lecturas FC03 de baseline cada 3 s; no se presupone OPC UA o DNP3 periódico.",
+      "packet": "Cada lectura debe tener una petición Modbus FC03 y una respuesta FC03; FC06 no es una lectura.",
+      "evidence": "Salida de generate-traffic.py, eventos Modbus/TCP y un PCAP limitado a tcp port 502.",
+      "criterion": "Se encuentran al menos cinco pares petición/respuesta y se explica la diferencia FC03/FC06."
+    },
+    {
+      "title": "Capturar la ventana de observación",
+      "action": null,
+      "command": null,
+      "observation": "bash scripts/baseline-capture.sh captura 22 s en el namespace de plant y activa, de forma explícita, modbus-write, opcua-write, dnp3-signal e intercept. Esos flujos son inducidos por escenarios, no una periodicidad normal de OPC/DNP.",
+      "packet": "El PCAP puede incluir FC03, FC06, OPC UA y DNP3/TCP; la presencia de un paquete no prueba quién autorizó una acción.",
+      "evidence": "Archivo pcaps/ot-ics-labs-<UTC>.pcap, nombre/sha256, intervalo de captura y lista de escenarios activados.",
+      "criterion": "El registro separa tráfico de baseline de tráfico producido por cada escenario y mantiene la captura dentro de Docker."
+    },
+    {
+      "title": "Inspeccionar PCAP con tshark/Wireshark",
+      "action": null,
+      "command": null,
+      "observation": "Se filtran puertos, función Modbus, protocolo OPC UA y DNP3; si DNP3 no se decodifica, se aplica Decode As sobre TCP/20000 y se contrasta 05 64.",
+      "packet": "La evidencia de bytes proviene del PCAP. El panel, la API y los bytes mostrados por el navegador no se presentan como bytes de PCAP.",
+      "evidence": "CSV/TSV exportado por tshark con frame, timestamp, IP/puerto, función y protocolo; al menos una petición y respuesta por flujo disponible.",
+      "criterion": "La tabla identifica origen, destino, protocolo, finalidad prevista y anomalía que sería detectable sin atribuir una firma inexistente."
+    },
+    {
+      "title": "Correlacionar SCADA/3D y fuentes de observabilidad",
+      "action": null,
+      "command": null,
+      "observation": "La vista muestra el gemelo (TK-101, P-101, temperatura, caudal, semáforo y cartel). Tráfico en vivo son observaciones de aplicación; Riesgos y alertas mezcla alertas analíticas con EVE JSON de Suricata.",
+      "packet": "El estado visual no demuestra un frame; la banda histórica no es un espejo completo de paquetes.",
+      "evidence": "Captura de pantalla nominal, exportación JSON de eventos, PCAP y, si existe, línea EVE con engine Suricata.",
+      "criterion": "Se citan dos fuentes independientes antes de afirmar una anomalía y se marca sin evidencia IDS cuando no existe alerta EVE."
+    },
+    {
+      "title": "Restaurar y conservar evidencias",
+      "action": "reset",
+      "command": null,
+      "observation": "Restablecer vuelve al estado nominal del gemelo, pero no borra históricos ni PCAP.",
+      "packet": "No se inventa tráfico periódico posterior al reset; se verifica el estado mediante la API/panel.",
+      "evidence": "PCAP con hash, tabla de observaciones, captura nominal y nota de límites.",
+      "criterion": "El informe final distingue estado simulado, tráfico capturado y registros de aplicación."
+    }
+  ],
+  "mitre": [
+    {
+      "tactic": "Collection",
+      "technique_id": "T0801",
+      "technique": "Monitor Process State",
+      "scope": "Relación técnica representada, no atribución adversaria: la lectura FC03 de holding registers representa recolección de estado del proceso dentro del conducto didáctico.",
+      "evidence": "Petición/respuesta FC03 en el PCAP, registro de siete valores y panel de estado del gemelo. La lectura es generada por trainer autorizado.",
+      "mitigation": "Línea base de funciones, origen y frecuencia; allowlist de clientes; correlación con estado independiente y revisión de lecturas fuera de patrón.",
+      "source": "https://attack.mitre.org/techniques/T0801/"
+    },
+    {
+      "tactic": "Discovery",
+      "technique_id": "T0842",
+      "technique": "Network Sniffing",
+      "scope": "Analogía defensiva explícita: tcpdump/Suricata observa la interfaz de control autorizada; esto no significa que exista un adversario ni que el sensor sea una intercepción de terceros.",
+      "evidence": "PCAP producido en el namespace de plant y EVE JSON cuando una regla genera alerta. La captura es pasiva y limitada a la ruta visible.",
+      "mitigation": "Autorizar y proteger el sensor, segmentar el conducto, controlar privilegios de captura y usar SPAN/TAP autorizado en una planta real.",
+      "source": "https://attack.mitre.org/techniques/T0842/"
+    },
+    {
+      "tactic": "Impair Process Control",
+      "technique_id": "T0836",
+      "technique": "Modify Parameter",
+      "scope": "Solo comportamiento simulado por el escenario explícito modbus-write/intercept: una escritura FC06 puede cambiar el setpoint del gemelo. No es parte de la periodicidad FC03 y no implica actor malicioso.",
+      "evidence": "FC06 y cambio de velocidad en el estado simulado cuando el script activa el escenario; se debe etiquetar como acción del laboratorio.",
+      "mitigation": "Autenticación, autorización por rol, write protection, validación de entradas, doble control y auditoría de cambios.",
+      "source": "https://attack.mitre.org/techniques/T0836/"
+    },
+    {
+      "tactic": "Impact",
+      "technique_id": "T0831",
+      "technique": "Manipulation of Control",
+      "scope": "Solo conducta de control representada por el escenario dnp3-signal/OPC UA write. La respuesta del gemelo es software y no es un proceso físico real.",
+      "evidence": "Trama DNP3 o Write OPC UA y cambio de semáforo/setpoint solamente si el escenario fue ejecutado y quedó registrado.",
+      "mitigation": "Autenticidad de comunicaciones, autorización de comandos, canal fuera de banda para validar cambios y límites de proceso independientes.",
+      "source": "https://attack.mitre.org/techniques/T0831/"
+    },
+    {
+      "tactic": "Collection / analogía excluida",
+      "technique_id": null,
+      "technique": "Proxy didáctico de una trama Modbus: analogía de integridad de mensaje, no Adversary-in-the-Middle",
+      "scope": "No se asigna T0830: intercept envía una trama editada al único destino fijo plant:502; no escucha, no redirige, no hace ARP spoofing y no intercepte tráfico transparente de terceros.",
+      "evidence": "Campos frame_before/frame_after del evento de aplicación y bytes de la única transacción, siempre con etiqueta proxy didáctico.",
+      "mitigation": "Autenticidad e integridad criptográfica, segmentación y control de acceso a infraestructura; probar estas medidas en entornos autorizados.",
+      "source": "https://attack.mitre.org/techniques/T0830/"
+    }
+  ],
+  "iec": [
+    {
+      "reference": "IEC 62443 FR1 — Identification and Authentication Control (mapeo conceptual)",
+      "application": "Inventariar trainer, plant, dnp3 y navegador; reconocer que el token de demostración y el endpoint OPC UA NoSecurity no son autenticación de producción. Proponer identidades, certificados y roles. No es certificación."
+    },
+    {
+      "reference": "IEC 62443 FR2 — Use Control (mapeo conceptual)",
+      "application": "Restringir quién puede leer o escribir, separar lectura FC03 de comandos y mantener la acción reset como operación didáctica permitida. No declarar nivel de seguridad alcanzado."
+    },
+    {
+      "reference": "IEC 62443 FR3 — System Integrity (mapeo conceptual)",
+      "application": "Validar función, registro, rango y estado; conservar hash del PCAP; contrastar evento, paquete y estado. La firma simplificada de Suricata no equivale a integridad de un sistema real."
+    },
+    {
+      "reference": "IEC 62443 FR4 — Data Confidentiality (mapeo conceptual)",
+      "application": "Observar que Modbus/TCP y DNP3 de la maqueta no ofrecen por sí mismos la confidencialidad de una arquitectura endurecida y que OPC UA está intencionalmente en NoSecurity. Proponer cifrado donde sea viable."
+    },
+    {
+      "reference": "IEC 62443 FR5 — Restricted Data Flow (mapeo conceptual)",
+      "application": "Usar zonas/conductos como lenguaje de diseño: control es red Docker internal, destinos son nombres fijos y solo el dashboard se publica en loopback. Esto aproxima un conducto, no una DMZ ni una certificación IEC 62443."
+    },
+    {
+      "reference": "IEC 62443 FR6 — Timely Response to Events (mapeo conceptual)",
+      "application": "Medir tiempo entre frame, evento de aplicación, estado visual y EVE; registrar ausencia de firma como sin evidencia IDS, no como detección."
+    },
+    {
+      "reference": "IEC 62443 FR7 — Resource Availability (mapeo conceptual)",
+      "application": "Mantener la ventana corta de captura, límites de comandos y recuperación por reset; no extrapolar disponibilidad del contenedor a disponibilidad de una planta física."
+    }
+  ],
+  "limitations": [
+    "La planta es un gemelo digital con maqueta 3D/software; no hay PLC físico, RTU física, sensores, actuadores ni SIS auténtico.",
+    "La red control es un conducto de entrenamiento Docker; no reproduce separación física, DMZ industrial, Purdue completo ni una certificación IEC 62443.",
+    "El proxy Modbus del escenario intercept no es proxy transparente, MITM ni ARP spoofing: envía una PDU editada a plant:502.",
+    "El PCAP solo ve la ruta/interfaz disponible en el namespace plant; no promete visibilidad de tráfico ajeno ni espejo completo.",
+    "El panel de tráfico y los eventos API son observabilidad de aplicación, no bytes de PCAP; nunca se atribuyen bytes del navegador a una captura.",
+    "OPC UA NoSecurity, el token por defecto y las reglas IDS simplificadas son decisiones didácticas y no controles de producción.",
+    "OPC UA y DNP3 no tienen tráfico periódico inventado: en esta práctica aparecen en PCAP únicamente cuando baseline-capture.sh activa sus escenarios explícitos.",
+    "Una lectura FC03 legítima o una alerta analítica no demuestra intrusión, autorización indebida ni atribución a un actor.",
+    "La Ley chilena 21.663 se cita solo como contexto general de ciberseguridad; esta práctica no determina aplicabilidad, plazos, reportes ni sanciones legales."
+  ]
+}
