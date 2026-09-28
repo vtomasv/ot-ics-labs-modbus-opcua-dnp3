@@ -1,0 +1,13 @@
+{
+  "name": "ot-ics-screenshot-review",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Revisión visual reproducible de los cuatro laboratorios Docker en loopback",
+  "type": "module",
+  "scripts": {
+    "capture": "node capture.mjs"
+  },
+  "devDependencies": {
+    "playwright-core": "1.56.1"
+  }
+}
