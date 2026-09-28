@@ -3,11 +3,15 @@
 from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 import json
+import os
 import time
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-BASE = 'http://127.0.0.1:8080'
+_port = os.getenv('LAB_VERIFY_PORT', '8080')
+if not _port.isdecimal() or not 1024 < int(_port) <= 65535:
+    raise ValueError('LAB_VERIFY_PORT debe ser un puerto local 1025..65535')
+BASE = f'http://127.0.0.1:{_port}'
 
 
 def request(path, method='GET', payload=None):

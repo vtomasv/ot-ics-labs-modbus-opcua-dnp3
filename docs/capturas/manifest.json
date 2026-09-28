@@ -1,0 +1,126 @@
+{
+  "capturedAtUtc": "2026-09-28T01:11:36.581Z",
+  "sourceCommitAtCapture": "3d7cf6273f2b81799c119c9cc38fe223da0943eb",
+  "environment": "Chromium headless 1600 × 1480 y móvil 390 × 920; Docker aislado; Playwright Core 1.56.1",
+  "captureOrigin": "HTTP solo 127.0.0.1; datos SCADA de la API y bytes de un sensor PCAP pasivo; sin mocks",
+  "caveat": "Los cuatro laboratorios comparten estado e historial: cada pantalla nominal se restablece, pero eventos y PCAP de prácticas anteriores permanecen y se identifican como histórico global.",
+  "files": [
+    {
+      "file": "docs/capturas/01-baseline-completo.png",
+      "lab": "01-baseline",
+      "phase": "práctica completa después de línea base",
+      "width": 1600,
+      "height": 4367,
+      "bytes": 1130486,
+      "sha256": "2a0a7281967f8f69ad861ef8f22ea324d26c00c0bae2dbbdb8aacecbc6099586"
+    },
+    {
+      "file": "docs/capturas/02-modbus-completo.png",
+      "lab": "02-modbus",
+      "phase": "práctica completa después de Modbus",
+      "width": 1600,
+      "height": 4251,
+      "bytes": 1060602,
+      "sha256": "988c3b9353c42cc55eb0e8f50338b6917050123ba074658b3cd37054a98d0232"
+    },
+    {
+      "file": "docs/capturas/03-opcua-completo.png",
+      "lab": "03-opcua",
+      "phase": "práctica completa después de OPC UA",
+      "width": 1600,
+      "height": 4132,
+      "bytes": 1091562,
+      "sha256": "01358730c8c86f079d53f3c4a496f9d976ee4cf0a7a33463cfaea87fa5832cbe"
+    },
+    {
+      "file": "docs/capturas/04-dnp3-completo.png",
+      "lab": "04-dnp3",
+      "phase": "práctica completa después de DNP3",
+      "width": 1600,
+      "height": 4213,
+      "bytes": 1131829,
+      "sha256": "118aa48b4b18d4b84e7c9ddf4385accde92332f5500d382590709402a7d4469b"
+    },
+    {
+      "file": "docs/consola-alerta.png",
+      "lab": "02-modbus",
+      "phase": "FC06=85 · alerta 1600 × 1250",
+      "width": 1600,
+      "height": 1250,
+      "bytes": 356909,
+      "sha256": "202c9005207158622d5a301b03d061edb7635f612f46d1c2889f2249ad48a090"
+    },
+    {
+      "file": "docs/consola-preview.png",
+      "lab": "01-baseline",
+      "phase": "nominal · consola 1600 × 1250",
+      "width": 1600,
+      "height": 1250,
+      "bytes": 369776,
+      "sha256": "82a1943936c041dd2eef0c570a7fe699946a37b0a7f0e3f9c09cba255698e4af"
+    },
+    {
+      "file": "docs/preview-01-baseline.png",
+      "lab": "01-baseline",
+      "phase": "nominal · 1600 × 1480",
+      "width": 1600,
+      "height": 1480,
+      "bytes": 401475,
+      "sha256": "7da9ef6c272ace60617d763ad4a0ac635979ccd5b5298546c77412075ead9408"
+    },
+    {
+      "file": "docs/preview-02-modbus.png",
+      "lab": "02-modbus",
+      "phase": "nominal · 1600 × 1480",
+      "width": 1600,
+      "height": 1480,
+      "bytes": 410068,
+      "sha256": "b74352dceb786d998b82653c6ff6fa2fe97cac9341572b5ccd60da449910c8ae"
+    },
+    {
+      "file": "docs/preview-03-opcua.png",
+      "lab": "03-opcua",
+      "phase": "nominal · 1600 × 1480",
+      "width": 1600,
+      "height": 1480,
+      "bytes": 431090,
+      "sha256": "106c3a7a41bd9e688207be8823ff84fbb7ee84075a79a9cb69b9fb6802eb9706"
+    },
+    {
+      "file": "docs/preview-04-dnp3.png",
+      "lab": "04-dnp3",
+      "phase": "nominal · 1600 × 1480",
+      "width": 1600,
+      "height": 1480,
+      "bytes": 420352,
+      "sha256": "e8d58d450afdb94203dc1d47b41520ed29ec00798c6a88a4f8dc9de7483f9c78"
+    },
+    {
+      "file": "docs/preview-mobile.png",
+      "lab": "03-opcua",
+      "phase": "móvil nominal · 390 × 920",
+      "width": 390,
+      "height": 920,
+      "bytes": 133893,
+      "sha256": "d16e190f1c8c22a2d65c52b449eb664c11b48a143ad3c261690bbf079163cd91"
+    },
+    {
+      "file": "docs/preview-network.png",
+      "lab": "02-modbus",
+      "phase": "mapa · FC03 observado",
+      "width": 1600,
+      "height": 1480,
+      "bytes": 289604,
+      "sha256": "daf4ce09b39fedf49f1e4bc067835752cad0fdffa3e7bc1b3be5b3476eaa6b44"
+    },
+    {
+      "file": "docs/preview-pump-focus.png",
+      "lab": "02-modbus",
+      "phase": "FC06=85 · detalle bomba P-101",
+      "width": 1600,
+      "height": 1480,
+      "bytes": 447858,
+      "sha256": "cf2fe737d37f6a00f61c589ec9b922e4bfc071e653edecc08602825aabfe69df"
+    }
+  ]
+}
