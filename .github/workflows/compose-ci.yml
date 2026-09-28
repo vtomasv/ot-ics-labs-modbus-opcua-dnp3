@@ -32,6 +32,20 @@ jobs:
           test "$(docker compose config --format json | jq -r '.services.trainer.platform')" = linux/amd64
           test "$(docker compose config --format json | jq -r '.services.dnp3.platform')" = linux/amd64
           test "$(docker compose config --format json | jq -r '.services.sensor.platform')" = linux/amd64
+      - name: Verify all thirteen screenshots against their SHA-256 manifest
+        run: |
+          python3 - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          manifest = json.loads(Path('docs/capturas/manifest.json').read_text())
+          assert len(manifest['files']) == 13
+          for item in manifest['files']:
+              assert item['file'].startswith('docs/') and item['file'].endswith('.png')
+              content = Path(item['file']).read_bytes()
+              assert len(content) == item['bytes']
+              assert hashlib.sha256(content).hexdigest() == item['sha256'], item['file']
+          print('13/13 capturas íntegras')
+          PY
       - name: Build and start the isolated plant
         run: docker compose up -d
       - name: Verify all four protocol scenarios and IDS
