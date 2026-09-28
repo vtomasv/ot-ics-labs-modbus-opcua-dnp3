@@ -18,6 +18,7 @@ services:
       - control
     volumes:
       - ./pcaps:/captures
+      - live-captures:/captures/live:ro
       - evidence:/evidence
       - suricata-logs:/suricata:ro
     healthcheck:
@@ -84,6 +85,27 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  sensor:
+    build: .
+    image: ot-ics-labs:local
+    platform: linux/amd64
+    pull_policy: build
+    command: ["bash", "/lab/scripts/start-sensor.sh"]
+    restart: unless-stopped
+    environment:
+      CAPTURE_BACKEND: ${CAPTURE_BACKEND:-auto}
+    network_mode: "service:plant"
+    depends_on:
+      plant:
+        condition: service_healthy
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+    volumes:
+      - live-captures:/captures/live
+    security_opt:
+      - no-new-privileges:true
+
 networks:
   control:
     internal: true
@@ -94,3 +116,4 @@ networks:
 volumes:
   evidence:
   suricata-logs:
+  live-captures:

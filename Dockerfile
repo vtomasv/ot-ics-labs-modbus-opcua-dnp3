@@ -1,10 +1,11 @@
 FROM python:3.11-slim-bookworm
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 WORKDIR /lab
-RUN apt-get update -qq && apt-get install -y --no-install-recommends tcpdump ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update -qq && apt-get install -y --no-install-recommends tcpdump iproute2 ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY requirements.txt ./
 RUN python -m pip install --no-cache-dir --only-binary=:all: -r requirements.txt
 COPY app ./app
+COPY docs ./docs
 COPY trainerapp ./trainerapp
 COPY dnp3 ./dnp3
 COPY scripts ./scripts

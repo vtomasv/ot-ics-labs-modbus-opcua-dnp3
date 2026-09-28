@@ -1,0 +1,181 @@
+{
+  "id": "03-opcua",
+  "number": 3,
+  "title": "Integridad OPC UA: escritura de setpoint y modelo de confianza",
+  "protocol": "OPC UA",
+  "subtitle": "Un Write real en un endpoint NoSecurity, observado con SCADA/3D, eventos y PCAP",
+  "summary": "Práctica defensiva en una red Docker interna: un cliente OPC UA del contenedor trainer escribe Planta/SpeedSetpoint=75 en el gemelo digital servido por plant:4840. El alumno distingue la transacción OPC UA real de la petición HTTP del navegador, contrasta estado, eventos y PCAP, y propone controles de autenticación, autorización, integridad, confidencialidad y segmentación. SecurityPolicy None es una configuración intencionalmente débil del laboratorio, no una propiedad inevitable de OPC UA ni una recomendación de producción.",
+  "duration": "45 min",
+  "objectives": [
+    "Identificar el cliente OPC UA, el servidor, el nodo Planta/SpeedSetpoint y el conducto Docker fijo plant:4840.",
+    "Ejecutar una escritura OPC UA real y verificar el valor 75 Hz mediante la API, la vista SCADA/3D y los eventos de aplicación.",
+    "Capturar y filtrar el tráfico del namespace interno con tcpdump/tshark sin atribuir a la interfaz web los bytes OPC UA.",
+    "Explicar qué aportan None, Sign y SignAndEncrypt, los certificados de aplicación, las TrustLists, la autenticación de usuario y los permisos por nodo/rol.",
+    "Relacionar el cambio de parámetro con MITRE ATT&CK for ICS T0836 como analogía técnica controlada, sin presentar una acción autorizada del laboratorio como intrusión.",
+    "Proponer un mapeo conceptual IEC 62443 FR1–FR7 y controles verificables, sin reivindicar certificación ni un Security Level alcanzado.",
+    "Aplicar aislamiento, uso legal autorizado y la política de destinos fijos; no conectar la maqueta a una red OT, PLC o SIS real."
+  ],
+  "nodes": [
+    {
+      "id": "browser",
+      "label": "Navegador anfitrión / consola SCADA-3D",
+      "role": "Visualización HTTP/JSON y activación de escenarios; no es cliente OPC UA",
+      "zone": "dashboard, solo loopback"
+    },
+    {
+      "id": "trainer",
+      "label": "trainer / cliente OPC UA",
+      "role": "Cliente asyncua que ejecuta el Write; también genera FC03 de línea base",
+      "zone": "control Docker interna"
+    },
+    {
+      "id": "plant",
+      "label": "plant / servidor OPC UA y gemelo digital",
+      "role": "Servidor opc.tcp, API, proceso virtual y nodos Planta/*",
+      "zone": "control Docker interna"
+    },
+    {
+      "id": "suricata",
+      "label": "Suricata",
+      "role": "Sensor pasivo del namespace de plant; EVE JSON, no espejo completo",
+      "zone": "control Docker interna"
+    },
+    {
+      "id": "sensor",
+      "label": "sensor / tcpdump",
+      "role": "captura pasiva Ethernet a PCAP rotativo; sin puerto publicado",
+      "zone": "namespace de plant / interfaz hacia trainer"
+    }
+  ],
+  "links": [
+    {
+      "from": "browser",
+      "to": "plant",
+      "protocol": "HTTP/JSON",
+      "port": 8080
+    },
+    {
+      "from": "trainer",
+      "to": "plant",
+      "protocol": "OPC UA/TCP",
+      "port": 4840
+    },
+    {
+      "from": "trainer",
+      "to": "plant",
+      "protocol": "HTTP/JSON de observación interna",
+      "port": 8000
+    },
+    {
+      "from": "plant",
+      "to": "suricata",
+      "protocol": "captura pasiva del namespace",
+      "port": null
+    },
+    {
+      "from": "plant",
+      "to": "sensor",
+      "protocol": "observación pasiva de 502, 4840 y 20000",
+      "port": null
+    }
+  ],
+  "steps": [
+    {
+      "title": "Restablecer el gemelo digital",
+      "action": "reset",
+      "command": "docker compose exec -T plant python -c \"import urllib.request; r=urllib.request.Request('http://127.0.0.1:8000/api/scenario/reset', method='POST'); print(urllib.request.urlopen(r, timeout=10).read().decode())\"",
+      "observation": "La API confirma el estado nominal; la vista 3D vuelve a una velocidad dentro del rango nominal y no hay que inferir que se borraron históricos o PCAP.",
+      "packet": "No se genera una escritura OPC UA de alumno; reset es una operación local de la API.",
+      "evidence": "Respuesta JSON de /api/scenario/reset y captura de la vista nominal.",
+      "criterion": "El estado inicial queda documentado y el alumno distingue reset de limpieza de evidencias."
+    },
+    {
+      "title": "Ejecutar el Write OPC UA",
+      "action": "opcua-write",
+      "command": "docker compose exec -T plant python -c \"import urllib.request; r=urllib.request.Request('http://127.0.0.1:8000/api/scenario/opcua-write', method='POST'); print(urllib.request.urlopen(r, timeout=20).read().decode())\"",
+      "observation": "trainer abre opc.tcp://plant:4840/ot-lab/, localiza el namespace urn:ot-ics-labs:planta y escribe Planta/SpeedSetpoint=75. La API confirma un Write auténtico y el gemelo/SCADA muestra 75 Hz y una condición fuera del nominal <=60 Hz.",
+      "packet": "Tráfico OPC UA entre trainer y plant en 4840/TCP; no se atribuyen estos bytes al navegador.",
+      "evidence": "Respuesta del escenario, /api/state con speed_setpoint=75, evento OPC UA de cliente a servidor y captura antes/después de la vista 3D.",
+      "criterion": "Se verifica el nodo, el valor final 75 y la correspondencia temporal entre transacción y estado."
+    },
+    {
+      "title": "Capturar solo el conducto interno OPC UA",
+      "action": null,
+      "command": "docker compose exec -T plant timeout 20 tcpdump -i any -U -s 0 -w /captures/03-opcua.pcap 'tcp port 4840'",
+      "observation": "En una segunda terminal se ejecuta el escenario opcua-write durante la ventana de captura; el archivo queda en pcaps/03-opcua.pcap del anfitrión por el volumen captures.",
+      "packet": "La captura está limitada al namespace de plant y al puerto 4840; no es una captura de la red del anfitrión ni de una OT real.",
+      "evidence": "Tamaño no cero de pcaps/03-opcua.pcap y comando usado, con fecha y terminal de ejecución.",
+      "criterion": "El PCAP se obtiene sin publicar 4840 ni cambiar el destino fijo plant."
+    },
+    {
+      "title": "Analizar PCAP con tshark y contrastar observables",
+      "action": null,
+      "command": null,
+      "observation": "Se filtra tcp.port==4840 y, si el disector está disponible, opcua. Se identifican extremos trainer/plant y el flujo de sesión sin afirmar un método concreto si el disector no lo decodifica.",
+      "packet": "La petición HTTP del navegador activa la API en 8080; el flujo OPC UA lo genera trainer. El feed de eventos y el PCAP son fuentes distintas.",
+      "evidence": "Salida tshark con frame, IP, puertos, longitud y columna Info; filtro aplicado y correlación con timestamp del evento.",
+      "criterion": "El alumno no confunde bytes HTTP del navegador, evento de aplicación, notificación 3D y mensajes OPC UA."
+    },
+    {
+      "title": "Restablecer y cerrar la evidencia",
+      "action": "reset",
+      "command": "docker compose exec -T plant python -c \"import urllib.request; r=urllib.request.Request('http://127.0.0.1:8000/api/scenario/reset', method='POST'); print(urllib.request.urlopen(r, timeout=10).read().decode())\"",
+      "observation": "El proceso vuelve a línea base; el PCAP y los eventos quedan disponibles para revisión y no se borran con reset.",
+      "packet": "No se inventa tráfico periódico OPC UA o DNP3; la línea base periódica implementada por trainer es FC03 Modbus.",
+      "evidence": "Estado final nominal, ruta del PCAP y ficha de evidencias.",
+      "criterion": "La práctica termina aislada, reproducible y con una conclusión de límites."
+    }
+  ],
+  "mitre": [
+    {
+      "tactic": "Impair Process Control",
+      "technique_id": "T0836",
+      "technique": "Modify Parameter",
+      "scope": "Analogía técnica controlada, no atribución de adversario ni prueba de intrusión",
+      "evidence": "El escenario escribe el parámetro de proceso Planta/SpeedSetpoint=75 mediante un cliente OPC UA real y el gemelo aplica el cambio. La relación se limita al tipo de conducta (modificar un parámetro); el operador trainer está autorizado por diseño didáctico.",
+      "mitigation": "Autorización por roles y por nodo, autenticación de usuario y aplicación, validación de rango y precondiciones, protección de escritura, auditoría de cambios y verificación independiente del proceso.",
+      "source": "https://attack.mitre.org/techniques/T0836/"
+    }
+  ],
+  "iec": [
+    {
+      "reference": "IEC 62443 FR1 — Identification and authentication control",
+      "application": "Exigir identidad de aplicación con certificado confiable, autenticación de usuario y gestión de TrustList/CA; la maqueta NoSecurity no implementa ese control."
+    },
+    {
+      "reference": "IEC 62443 FR2 — Use control",
+      "application": "Separar Observer/Operator/Engineer/Supervisor y autorizar Write solo al nodo, horario, rango y cambio aprobados; set_writable() del laboratorio no equivale a RBAC."
+    },
+    {
+      "reference": "IEC 62443 FR3 — System integrity",
+      "application": "Preferir Sign o SignAndEncrypt según objetivo, validar entradas y registrar cambios; el endpoint None no demuestra integridad criptográfica."
+    },
+    {
+      "reference": "IEC 62443 FR4 — Data confidentiality",
+      "application": "Usar SignAndEncrypt cuando la confidencialidad del canal sea necesaria; None expone deliberadamente la práctica a este límite."
+    },
+    {
+      "reference": "IEC 62443 FR5 — Restricted data flow",
+      "application": "Definir zonas y conductos, allowlist de clientes y puertos, y una DMZ/segmentación real en producción; control es solo una red Docker internal."
+    },
+    {
+      "reference": "IEC 62443 FR6 — Timely response to events",
+      "application": "Correlacionar Write, valor fuera de rango, estado de proceso, auditoría y alerta; el panel es observabilidad didáctica, no un SOC ni respuesta certificada."
+    },
+    {
+      "reference": "IEC 62443 FR7 — Resource availability",
+      "application": "Aplicar límites de tasa, disponibilidad, recuperación y validación segura; el trip del gemelo es software y no un SIS."
+    }
+  ],
+  "limitations": [
+    "La planta, el controlador y el proceso son una maqueta 3D/gemelo digital y software; no hay PLC físico, sensores, válvulas, firmware ni SIS real.",
+    "OPC UA usa SecurityPolicy None de forma visible e intencional; no se validan certificados, TrustLists, autenticación de usuario ni roles de producción.",
+    "trainer y plant solo usan destinos Docker fijos; control es internal y 4840/TCP no se publica al anfitrión. El proxy Modbus existente no es una intercepción transparente y está fuera de las acciones de este laboratorio.",
+    "La consola del navegador solicita HTTP/JSON a la API; el cliente OPC UA real es trainer. No se deben atribuir bytes del navegador a un PCAP de 4840/TCP.",
+    "El panel de tráfico son observaciones de aplicación y el EVE de Suricata son registros separados; ninguno sustituye un espejo completo de paquetes.",
+    "La captura de referencia puede no ser idéntica entre versiones de Docker, librerías o disectores tshark; se deben reportar filtros y ausencia de decodificación en vez de inventar campos.",
+    "La línea base implementada por trainer genera lecturas Modbus FC03 periódicas; no se inventa tráfico periódico OPC UA o DNP3.",
+    "La relación MITRE es una analogía didáctica del comportamiento observado, no una atribución, campaña o hallazgo de compromiso.",
+    "La Ley chilena 21.663 se menciona solo como contexto general de ciberseguridad. Este ejercicio no es asesoría legal, auditoría ni certificación y no afirma plazos, multas o aplicabilidad sectorial sin revisión oficial."
+  ]
+}

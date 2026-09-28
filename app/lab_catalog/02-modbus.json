@@ -1,0 +1,191 @@
+{
+  "id": "02-modbus",
+  "number": 2,
+  "title": "Integridad Modbus y proxy didáctico",
+  "protocol": "Modbus/TCP",
+  "subtitle": "FC03 como línea base, FC06 como cambio de parámetro y comparación de una trama explícitamente reenviada",
+  "summary": "Laboratorio controlado para observar lecturas FC03, correlacionar una escritura FC06 con el gemelo digital y comparar los bytes MBAP/PDU de 45 Hz frente a 90 Hz en un proxy explícito de una sola trama. La representación es software/3D: no hay PLC físico, SIS ni intercepción transparente de terceros.",
+  "duration": "50 minutos",
+  "objectives": [
+    "Distinguir una observación de tráfico Modbus/TCP de una técnica representada en un escenario didáctico.",
+    "Interpretar FC03 y FC06 con direccionamiento de registros 0-based, unidad 1 y valores 45, 85 y 90 Hz.",
+    "Correlacionar PCAP, eventos de aplicación, estado de /api/state y alertas Suricata sin atribuir bytes del navegador al PCAP.",
+    "Explicar por qué el proxy de aula no es un MITM transparente, no hace ARP spoofing y solo envía una trama al destino fijo plant:502.",
+    "Proponer controles conceptuales de IEC 62443 para autenticación, uso, integridad, flujo restringido y respuesta, sin reivindicar certificación."
+  ],
+  "nodes": [
+    {
+      "id": "browser",
+      "label": "Navegador / consola 3D",
+      "role": "Dispara acciones HTTP y visualiza el gemelo",
+      "zone": "host-loopback"
+    },
+    {
+      "id": "trainer",
+      "label": "trainer",
+      "role": "Cliente Modbus, generador FC03 y proxy didáctico",
+      "zone": "control"
+    },
+    {
+      "id": "plant",
+      "label": "plant",
+      "role": "Servidor Modbus/TCP, API y gemelo digital",
+      "zone": "control/visualización"
+    },
+    {
+      "id": "suricata",
+      "label": "suricata",
+      "role": "Sensor pasivo de la ruta hacia trainer y registro EVE",
+      "zone": "control"
+    },
+    {
+      "id": "sensor",
+      "label": "sensor / tcpdump",
+      "role": "captura pasiva Ethernet a PCAP rotativo; sin puerto publicado",
+      "zone": "namespace de plant / interfaz hacia trainer"
+    }
+  ],
+  "links": [
+    {
+      "from": "browser",
+      "to": "plant",
+      "protocol": "HTTP API",
+      "port": 8080
+    },
+    {
+      "from": "trainer",
+      "to": "plant",
+      "protocol": "Modbus/TCP",
+      "port": 502
+    },
+    {
+      "from": "trainer",
+      "to": "suricata",
+      "protocol": "captura pasiva de interfaz Docker",
+      "port": null
+    },
+    {
+      "from": "plant",
+      "to": "sensor",
+      "protocol": "observación pasiva de 502, 4840 y 20000",
+      "port": null
+    }
+  ],
+  "steps": [
+    {
+      "title": "Restablecer y fijar la línea base",
+      "action": "reset",
+      "command": null,
+      "observation": "La consola vuelve a bomba encendida, 45 Hz, nivel cercano a 48 %, caudal cercano a 22,5 m³/h, cartel de operación y semáforo verde. El restablecimiento no borra históricos ni PCAP.",
+      "packet": "No se afirma una trama Modbus para el POST HTTP de reset; es una acción de la API local.",
+      "evidence": "Captura de la vista 3D y respuesta de /api/state antes de generar tráfico.",
+      "criterion": "La línea base queda registrada y se reconoce que el navegador activa la API, no que emite Modbus directamente."
+    },
+    {
+      "title": "Observar FC03 sin inventar tráfico de otros protocolos",
+      "action": null,
+      "command": "docker compose exec -T trainer python /lab/scripts/generate-traffic.py --count 5",
+      "observation": "El generador realiza cinco lecturas FC03 a plant:502. No cambia el setpoint; los eventos de aplicación pueden mostrar HMI → PLC. En este laboratorio no se presenta FC03 como prueba de intrusión.",
+      "packet": "PDU de petición esperada: 01 03 00 00 00 07. El MBAP/TID depende del cliente. La respuesta contiene 01 03 0E y siete registros de dos bytes.",
+      "evidence": "Salida del comando, /api/traffic y un PCAP filtrado a TCP/502.",
+      "criterion": "Se identifica FC03, inicio 0, cantidad 7 y ausencia de cambio en speed_setpoint; no se inventan lecturas periódicas OPC UA o DNP3."
+    },
+    {
+      "title": "Aplicar la escritura FC06 del escenario",
+      "action": "modbus-write",
+      "command": "docker compose exec -T trainer python /lab/scripts/attack-modbus-write.py --lab-only",
+      "observation": "El cliente lee el registro 2, escribe 85 y lee de retorno 85. El gemelo cambia la velocidad y puede elevar la advertencia visual cuando el estado se actualiza.",
+      "packet": "Ejemplo de petición: 00 11 00 00 00 06 01 06 00 02 00 55. MBAP: TID 0011, PID 0000, longitud 0006; PDU: unidad 01, FC06, dirección 0002, valor 0055 (85). La respuesta normal es eco.",
+      "evidence": "Salida del script, /api/state, evento Modbus/TCP y trama FC06 en el PCAP.",
+      "criterion": "Se correlacionan registro 2 (0-based), FC06, 0x0055=85 y estado simulado, sin afirmar autorización real ni PLC físico."
+    },
+    {
+      "title": "Separar observación de alertas y firma IDS",
+      "action": null,
+      "command": null,
+      "observation": "Los eventos del gemelo y la alerta OT-ANOMALY son analítica de aplicación. Una entrada con engine=Suricata solo se atribuye al sensor EVE; si no aparece, se registra sin evidencia IDS.",
+      "packet": "El panel de tráfico no sustituye los bytes de red; la captura es la fuente para afirmar que se vio una transacción Modbus.",
+      "evidence": "Comparación de /api/events, /api/alerts, docker compose logs suricata y PCAP.",
+      "criterion": "No se confunde una alarma de proceso con una firma Suricata ni se atribuyen bytes del navegador a la captura."
+    },
+    {
+      "title": "Ejecutar el proxy explícito de una trama",
+      "action": "intercept",
+      "command": null,
+      "observation": "La consola muestra el antes/después y el gemelo recibe 90 Hz. La implementación prepara una trama, cambia su valor y abre una conexión saliente única a plant:502; no escucha tráfico ajeno ni instala MITM transparente.",
+      "packet": "Antes: 00 11 00 00 00 06 01 06 00 02 00 2D. Después: 00 11 00 00 00 06 01 06 00 02 00 5A. Solo cambia el valor 0x002D=45 por 0x005A=90.",
+      "evidence": "Campos frame_before/frame_after del evento Modbus/TCP relay, panel Trama MBAP, /api/state y PCAP TCP/502.",
+      "criterion": "Se explica la integridad de la orden representada y se evita llamar a la acción intercepción transparente, ARP spoofing o modificación externa."
+    },
+    {
+      "title": "Leer y rotular la trama en Tshark",
+      "action": null,
+      "command": "docker compose exec -T plant tcpdump -i any -nn -s 0 -c 20 -w /captures/lab02-modbus.pcap 'tcp port 502'",
+      "observation": "El comando es una plantilla de captura dentro del namespace plant; para una secuencia completa se recomienda el procedimiento de la guía con timeout y nombre único.",
+      "packet": "Separar cabeceras Ethernet/IP/TCP de la carga Modbus. Los 12 bytes mostrados son MBAP+PDU, no una trama Ethernet completa.",
+      "evidence": "pcaps/lab02-*.pcap, salida tshark -V/-x y número de stream TCP.",
+      "criterion": "La evidencia de bytes proviene de PCAP y se conserva el límite de visibilidad de la interfaz Docker."
+    },
+    {
+      "title": "Restablecer y cerrar la evidencia",
+      "action": "reset",
+      "command": null,
+      "observation": "El estado vuelve a 45 Hz y semáforo verde. Se conservan eventos, alertas y PCAP para la entrega.",
+      "packet": "No se atribuye un paquete Modbus al POST de reset.",
+      "evidence": "Captura final de /api/state, historial exportado y ruta del PCAP.",
+      "criterion": "El alumno deja el gemelo en línea base y entrega una cadena de evidencia reproducible."
+    }
+  ],
+  "mitre": [
+    {
+      "tactic": "Impair Process Control",
+      "technique_id": "T0836",
+      "technique": "Modify Parameter",
+      "scope": "Representación didáctica del resultado de modificar un parámetro de control; no atribuye una intrusión, campaña ni actor.",
+      "evidence": "FC06 escribe el holding register 2 con 85 en modbus-write y el proxy explícito envía 90; el gemelo cambia speed_setpoint y registra el efecto simulado.",
+      "mitigation": "Aplicar autorización por rol, autenticación de usuario/dispositivo, protección de escritura, validación de rango y auditoría de cambios; correlacionar el valor escrito con el estado independiente.",
+      "source": "https://attack.mitre.org/techniques/T0836/"
+    },
+    {
+      "tactic": "Collection (solo como referencia de la analogía)",
+      "technique_id": null,
+      "technique": "Analogía limitada con Adversary-in-the-Middle: cambio de una trama en un proxy explícito",
+      "scope": "No se asigna T0830 al escenario como observación. El laboratorio no intercepta un flujo existente, no redirige ARP, no escucha terceros y solo abre una conexión a plant:502.",
+      "evidence": "El código registra frame_before/frame_after y envía una única trama editada; la evidencia demuestra una comparación de integridad, no una condición AiTM.",
+      "mitigation": "Usar autenticidad de mensajes, segmentación, control de acceso a la infraestructura de red, rutas autorizadas y validación fuera de banda según el riesgo.",
+      "source": "https://attack.mitre.org/techniques/T0830/"
+    }
+  ],
+  "iec": [
+    {
+      "reference": "IEC 62443 FR1 — Identification and authentication control",
+      "application": "Conceptualmente, identificar y autenticar clientes antes de permitir lectura/escritura. La maqueta usa un token interno de demostración y no demuestra identidad fuerte ni despliegue de producción."
+    },
+    {
+      "reference": "IEC 62443 FR2 — Use control",
+      "application": "Separar lectura FC03 de escritura FC06; asignar la escritura a roles, ventanas y aprobaciones; validar que el origen y el registro estén permitidos."
+    },
+    {
+      "reference": "IEC 62443 FR3 — System integrity",
+      "application": "Proteger la integridad y autenticidad de órdenes, controlar replay y verificar rango/estado. Modbus/TCP del ejercicio no proporciona por sí solo integridad criptográfica."
+    },
+    {
+      "reference": "IEC 62443 FR5 — Restricted data flow",
+      "application": "Restringir el conducto a trainer→plant:502 y mantener destinos fijos. La red Docker interna es una aproximación de aula y no una DMZ industrial ni una segmentación certificada."
+    },
+    {
+      "reference": "IEC 62443 FR6 — Timely response to events",
+      "application": "Correlacionar PCAP, eventos, estado y EVE/Suricata; definir alerta, revisión y recuperación. La regla IDS simplificada no garantiza visibilidad completa."
+    }
+  ],
+  "limitations": [
+    "La planta, el PLC/RTU y las protecciones son un gemelo digital, una maqueta 3D y lógica software; no existe PLC físico, SIS físico ni función de seguridad certificada.",
+    "El proxy Modbus prepara y envía una sola trama a plant:502. No es un proxy transparente, MITM, ARP spoofing, escucha de terceros ni modificación de tráfico externo.",
+    "Los puertos 502, 4840 y 20000 no se publican. El único acceso del anfitrión es la consola HTTP en loopback; no cambie el bind ni los destinos fijos.",
+    "La línea base de este laboratorio cubre FC03 y capturas Modbus/TCP. No se debe afirmar tráfico periódico OPC UA o DNP3 a partir de esta práctica.",
+    "El PCAP se toma en una interfaz del namespace Docker con visibilidad limitada. Las solicitudes HTTP del navegador solo disparan la API y no son bytes Modbus atribuibles al PCAP.",
+    "Suricata usa una firma didáctica con offsets fijos; la ausencia de engine=Suricata significa sin evidencia IDS, no que el paquete no existió.",
+    "El mapeo IEC 62443 es conceptual para aprendizaje y controles compensatorios; no es evaluación de riesgo, SL-T/SL-A ni certificación.",
+    "La Ley chilena 21.663 se menciona solo como contexto de gobernanza. Este laboratorio no determina aplicabilidad legal, plazos, multas ni cumplimiento."
+  ]
+}

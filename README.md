@@ -1,99 +1,98 @@
-# Laboratorios OT/ICS con Modbus, OPC UA y DNP3
+# OT/ICS Labs: cuatro experiencias Modbus, OPC UA y DNP3
 
-Este repositorio contiene **cuatro laboratorios ejecutables con un solo archivo Docker Compose**. Emula una planta de agua con tanque, bomba, sensores, cartel y semáforo; ofrece una consola 3D en Three.js y permite observar mensajes industriales reales, cambios del proceso y firmas de Suricata. Publica únicamente código, guías de ejecución, capturas de referencia y evidencias reproducibles de los laboratorios.
+**Laboratorios didácticos controlados** sobre una planta de agua virtual. Cada práctica tiene su propia URL, topología declarada, objetivos, pasos ejecutables, panel SCADA/3D, comandos OT acotados, paquete capturado, monitor de alertas, matriz MITRE ATT&CK for ICS y mapeo conceptual IEC 62443. Los tres protocolos viajan por **TCP real entre contenedores Docker**; la bomba, el tanque, el semáforo y la protección son **software simulado**, no hardware industrial ni un SIS certificado.
 
-> **Uso exclusivamente educativo y defensivo.** Ejecute el proyecto en un equipo de práctica, sin conectarlo a una red OT real. Los escenarios generan tráfico únicamente hacia servicios Docker de nombres fijos. No publique `502/TCP`, `4840/TCP` ni `20000/TCP`; no modifique los scripts para dirigirlos a otros equipos. La señal de tráfico y la protección de proceso son simulaciones, no dispositivos ni funciones certificadas.
+> **Uso legal y defensivo exclusivamente.** Ejecute esto únicamente en una máquina de enseñanza aislada y autorizada. No conecte el laboratorio a una red OT, PLC, RTU, SIS o infraestructura externa. No publique los puertos 502/TCP, 4840/TCP ni 20000/TCP; no cambie los destinos internos fijos. Los comandos de práctica son una lista blanca de operaciones sobre la maqueta: no hay inyección de bytes arbitrarios, escaneo, DoS, ARP spoofing ni exploit listo para terceros. `SecurityPolicy None` de OPC UA, el token de ejemplo y las reglas simplificadas son debilidades **intencionadas solo para enseñar**, nunca configuraciones de producción.
 
-## Lo que verá el alumno
+![Laboratorio Modbus: consola SCADA clara, telemetría y bomba P-101](docs/preview-02-modbus.png)
 
-Al iniciar, la consola presenta una planta en estado nominal. Los botones de la derecha generan transacciones reales Modbus/TCP, OPC UA y DNP3 dentro de la red Docker; la pantalla actualiza los valores cada segundo. El panel **Tráfico en vivo** muestra observaciones de aplicación, mientras que **Riesgos y alertas** distingue eventos analíticos de firmas `engine: Suricata`. Para analizar bytes de red use el PCAP: el panel no pretende sustituir Wireshark.
+## Arranque en un comando
 
-![Estado nominal de la planta 3D: tanque, bomba, cartel, semáforo y controles](docs/consola-preview.png)
-
-Después de ejecutar **Señal DNP3** y **Escritura Modbus**, el semáforo aparece rojo, el cartel advierte “DETENER / ANOMALÍA” y la velocidad cambia de 45 a 85 Hz. Esta es la **pantalla esperada** antes de restablecer el proceso:
-
-![Estado anómalo de la planta 3D con semáforo rojo, cartel de alerta y velocidad 85 Hz](docs/consola-alerta.png)
-
-## Requisitos y arranque
-
-Use Docker Engine, el plugin **Docker Compose v2** y al menos **2 GB libres** para imágenes y evidencias. Los tres servicios Python se construyen y ejecutan explícitamente como `linux/amd64`, porque la rueda fijada de `dnp3-python` solo existe para esa arquitectura. En un anfitrión **ARM64** (por ejemplo Apple Silicon), Docker Desktop necesita tener disponible la emulación amd64; puede tardar más y no constituye soporte ARM nativo. Si usa Docker Desktop en macOS, consulte la opción de **Rosetta para emulación x86_64/amd64** en sus ajustes cuando esté disponible. [5] Suricata resuelve `trainer` y selecciona la interfaz de red que lo alcanza, sin depender de un nombre como `eth1` ni de Docker Engine 28.1. Python 3.11, las bibliotecas de protocolos y `tcpdump` se instalan **dentro de la imagen**: el alumno no necesita instalarlos en el anfitrión. Wireshark o Tshark en el anfitrión son opcionales para abrir capturas.
+Requiere Docker Engine y **Docker Compose v2**, un anfitrión con recursos para la imagen Python y Suricata, acceso a Debian/PyPI/Docker Hub durante la primera construcción y navegador moderno. La rueda de `dnp3-python==0.3.0b1` está marcada *yanked* y solo está disponible para Linux amd64/CPython 3.11; Compose fija `platform: linux/amd64` y en ARM64 necesita emulación (más lenta, no validación nativa). No se requiere Python, Wireshark ni Tshark en el anfitrión para abrir el panel; Wireshark/Tshark son opcionales para analizar PCAP en profundidad.
 
 ```bash
 git clone https://github.com/vtomasv/ot-ics-labs-modbus-opcua-dnp3.git
 cd ot-ics-labs-modbus-opcua-dnp3
-docker compose version
 docker compose up -d
 docker compose ps
 bash scripts/verify-lab.sh
+python3 scripts/verify-workspaces.py
 ```
 
-La primera construcción necesita acceso a los repositorios Debian, PyPI y al registro de imágenes de Docker. `pull_policy: build` evita que Compose intente descargar del registro la imagen local inexistente `ot-ics-labs:local`; **solo la imagen pública de Suricata se descarga**. `docker compose ps` debe mostrar `plant` y `trainer` como **healthy** y `dnp3` y `suricata` como **running**. El script de verificación espera a que operador y RTU respondan y después comprueba cuatro escenarios, una firma Suricata de un FC06 reciente y las tramas antes/después del proxy. La salida termina en `PASS TODOS LOS ESCENARIOS`. [6]
+La única publicación del Compose es **`127.0.0.1:8080 → plant:8000`**. Si el puerto está ocupado, copie `.env.example` a `.env` y cambie `DASHBOARD_PORT`, pero conserve el bind de loopback. `plant` y `trainer` deben aparecer **healthy**; `dnp3`, `suricata` y `sensor` deben estar **running**. Si libpcap/tcpdump falla bajo emulación amd64 en ARM, el sensor pasa automáticamente a **AF_PACKET** y sigue produciendo PCAP Ethernet real. `CAPTURE_BACKEND=python` permite forzar este modo para diagnóstico. Abra estas pantallas en el mismo anfitrión:
 
-Para reconstruir después de modificar el código, use `docker compose up -d --build`; el primer arranque en un clon limpio **ya construye la imagen** mediante `docker compose up -d`.
+| Pantalla | Objetivo comprobable | Tráfico / efecto en el gemelo | Guía |
+|---|---|---|---|
+| [01 — Línea base](http://127.0.0.1:8080/labs/01-baseline) | Reconocer FC03, fuentes de evidencia y flujos normales | FC03 periódico del cliente; OPC UA y DNP3 solo cuando se activan escenarios explícitos | [Pasos y matriz](docs/labs/01-baseline.md) |
+| [02 — Integridad Modbus](http://127.0.0.1:8080/labs/02-modbus) | Decodificar MBAP/PDU FC06 y distinguir analítica de firma IDS | Registro 2 → 85/90 Hz, advertencia visual, firma FC06 | [Pasos y matriz](docs/labs/02-modbus.md) |
+| [03 — Escritura OPC UA](http://127.0.0.1:8080/labs/03-opcua) | Contrastar Write/Read y política `NoSecurity` | `Planta/SpeedSetpoint` → 75 Hz, proceso visual | [Pasos y matriz](docs/labs/03-opcua.md) |
+| [04 — Control DNP3](http://127.0.0.1:8080/labs/04-dnp3) | Interpretar Direct Operate, respuesta y readback | Salida analógica índice 0 → señal virtual roja | [Pasos y matriz](docs/labs/04-dnp3.md) |
 
-El flujo `.github/workflows/compose-ci.yml` repite la construcción y estas comprobaciones en GitHub Actions sobre runners Linux **amd64 y arm64** para cada cambio de `main` y cada pull request. En el runner ARM64 se habilita QEMU para probar la imagen amd64 emulada; esto no equivale a una validación nativa en macOS o Windows. Si falla, consulte su log antes de usar el cambio en un taller.
+La raíz `/` abre la primera práctica. **Las pantallas son independientes, pero la maqueta Docker es compartida**: ejecute *Restablecer* antes de cada práctica/alumno. El reset vuelve al estado nominal (45 Hz, señal verde); **no borra** eventos ni PCAP. Las casillas de los pasos son **autoevaluación local del alumno**, no una nota automática. Exporte la bitácora JSON y guarde el PCAP para comparar dos fuentes independientes.
 
-Abra **http://127.0.0.1:8080/** en el mismo anfitrión. Solo esa API web se publica, vinculada a `127.0.0.1`; los puertos industriales permanecen en Docker. Si `8080` está ocupado, copie `.env.example` a `.env`, cambie `DASHBOARD_PORT` y abra el puerto local elegido. **No cambie el bind de loopback a `0.0.0.0`.** La variable `LAB_TOKEN` del ejemplo es un token de demostración interno, no una credencial de producción.
+### Interfaz de operación e inspección mecánica
 
-Para terminar sin borrar evidencias, use `docker compose down`. **`docker compose down -v` elimina los volúmenes `evidence` y `suricata-logs`**; ejecute esa variante solo si realmente quiere perderlos. Los PCAP generados en `pcaps/` no forman parte de esos volúmenes.
+La consola utiliza una **paleta empresarial clara**, tarjetas de telemetría de alto contraste y un acento discreto propio de cada práctica. La vista del proceso aparece antes del [mapa ampliado](docs/preview-network.png): el operador observa primero el estado, luego traza el conducto Docker y examina el PCAP, las alertas, los pasos y la matriz MITRE. El comparador MBAP/PDU aparece solo en Modbus. Está adaptada a escritorio y móvil. Capturas verificadas: [línea base](docs/preview-01-baseline.png), [Modbus](docs/preview-02-modbus.png), [OPC UA](docs/preview-03-opcua.png), [DNP3](docs/preview-04-dnp3.png) y [pantalla móvil](docs/preview-mobile.png). La [galería de revisión de 13 imágenes](docs/capturas/README.md) incluye páginas completas **después de cada ejercicio**, procedencia y hashes; la [guía de merge](docs/merge.md) define puertas y riesgos antes de fusionar.
 
-## Cuatro prácticas en una sola maqueta
+En cualquier práctica, pulse **«Inspeccionar P-101»** para acercarse a la [bomba centrífuga modelada](docs/preview-pump-focus.png); **«Vista general»**, **↺** o doble clic devuelve la planta completa. El modelo procedural representa una **bomba horizontal de aspiración axial y descarga vertical** con voluta/bridas atornilladas, motor eléctrico aleteado, ventilador, acople protegido, bancada, válvula y manómetro. El tubo de aspiración sale del tanque y la descarga conduce a la salida de proceso; no hay un retorno hidráulico ficticio. La animación de ventilador/flujo solo aparece con la bomba encendida y velocidad positiva. **No es un CAD de fabricante**, ni modela curva Q-H, rendimiento, presión, inercia, cavitación o tiempos físicos de una bomba: setpoint, temperatura, caudal y nivel pertenecen al gemelo matemático didáctico. Los cambios mostrados después de Modbus/OPC UA/DNP3 provienen del estado de la maqueta y se contrastan con protocolos y PCAP, nunca de un equipo físico.
 
-Cada guía en `exercises/` especifica observaciones y criterios de éxito. Use **Restablecer laboratorio** antes de comenzar otra práctica; esta acción reinicia el estado simulado, **no** borra históricos ni PCAP.
+## Cómo se sigue una práctica
 
-| Laboratorio | Acción en la consola | Resultado comprobable |
-|---|---|---|
-| [01 — Línea base](exercises/ejercicio-1.md) | Observar y capturar tráfico normal | FC03 periódico, topología de flujos, PCAP con Modbus, OPC UA y DNP3 tras activar los escenarios |
-| [02 — Integridad Modbus](exercises/ejercicio-2.md) | **Escritura Modbus** y **Proxy de trama Modbus** | FC06 registro 2; 85 y 90 Hz; comparación MBAP/PDU; firma FC06 de Suricata |
-| [03 — Escritura OPC UA](exercises/ejercicio-3.md) | **Escritura OPC UA** | `Write` a `Planta/SpeedSetpoint` = 75 Hz; análisis de endpoint `NoSecurity` |
-| [04 — Control DNP3](exercises/ejercicio-4.md) | **Señal DNP3** | Control de salida analógica, lectura DNP3 de retorno y semáforo rojo |
+1. Abra la URL de su laboratorio. Lea objetivos y límites, observe la **topología lógica** de nodos y conductos; un enlace se resalta al ver payload capturado en el puerto correspondiente, no por el mero hecho de estar dibujado.
+2. Restablezca y registre el estado inicial en la vista SCADA/3D. Pulse **Inspeccionar P-101** si desea examinar el motor, el acople y la voluta antes/después. La HMI muestra nivel `TK-101`, bomba `P-101`, temperatura, caudal, señal y cartel. No es un equipo físico.
+3. Siga los pasos de la pantalla o su guía. Los botones predefinidos y el **constructor de comando OT** tienen destinos fijos: Modbus FC03/FC06 en `plant:502`, OPC UA Write en `plant:4840`, DNP3 Direct Operate en `plant:20000`. Rango FC06/OPC UA: 30–95 en el setpoint didáctico; DNP3 solo 0/1/2. El backend impone una pausa de 1,5 s entre comandos del mismo laboratorio.
+4. En **Paquetes reales**, seleccione un paquete, compare IP/puertos/hex y descargue el último segmento PCAP. El sensor `tcpdump` está en otro contenedor y captura Ethernet en el conducto de control; el lector web **no reensambla TCP ni descifra OPC UA**. Para analizar completamente use Wireshark/Tshark.
+5. Distinga el **log de aplicación** de una firma **`engine: Suricata`** y de los bytes PCAP. `OT-ANOMALY` es una alerta analítica del gemelo; las reglas DNP3 y OPC UA indican presencia de solicitud/HEL, **no** certifican que detectaron una orden o un Write.
+6. Registre hora, paquete, función/servicio observado, estado previo/posterior, regla y límite; revise el criterio antes de marcar el paso como documentado. En la matriz MITRE, una conducta **representada** no implica adversario, intrusión ni atribución. Restablezca al terminar sin borrar volúmenes.
 
-El escenario del proxy envía **una trama editada al destino fijo `plant:502`**; no hace ARP spoofing ni intercepción transparente de terceros. OPC UA opera intencionalmente con `SecurityPolicy None` para mostrar una configuración débil y **no** debe presentarse como configuración segura. El control DNP3 de esta maqueta tampoco implementa Secure Authentication. [1] [2]
+### Captura y herramientas de análisis
 
-El cliente Modbus de terminal permite repetir pruebas dentro de la red aislada:
+El sensor (`tcpdump` o su respaldo pasivo AF_PACKET) escribe en el volumen Docker `live-captures` **hasta tres segmentos de 16 MB**; el visor y `/api/capture/download` exponen el más reciente. Para guardar un PCAP propio en `pcaps/` use la captura de referencia del repositorio:
 
 ```bash
-docker compose exec -T trainer python /lab/scripts/generate-traffic.py --count 5
-docker compose exec -T trainer python /lab/scripts/attack-modbus-write.py --lab-only
+bash scripts/baseline-capture.sh
+# Ejemplo tras crear un archivo de captura:
+tshark -r pcaps/<archivo>.pcap -Y 'modbus || opcua || dnp3'
 ```
 
-Ambos scripts usan `plant:502` sin argumentos para cambiar el destino. Para obtener un PCAP de **22 segundos** con los escenarios, ejecute `bash scripts/baseline-capture.sh`. El script guarda `pcaps/ot-ics-labs-<fecha>.pcap` y no escucha la red del anfitrión. Puede inspeccionarlo con `tshark -r pcaps/<archivo>.pcap -Y 'modbus || opcua || dnp3'` o abrirlo en Wireshark. También se incluye una captura de referencia en `pcaps/ejemplo-referencia.pcap`.
+`baseline-capture.sh` activa varios escenarios durante 22 s: **su archivo no representa solo tráfico normal**. Para un protocolo único, siga la captura acotada descrita en cada [guía](docs/labs/02-modbus.md). El paquete descargado contiene datos del **conducto Docker**, no solicitudes HTTP del navegador ni una captura de todo el anfitrión. El panel presenta bytes de payload truncados a 192 por fila; abra el PCAP para ver tramas completas y reensamblar el flujo.
 
-## Arquitectura y observabilidad
+## Arquitectura y límites de confianza
 
-| Servicio | Rol | Visibilidad desde el anfitrión |
-|---|---|---|
-| `plant` | Gemelo, API, servidor Modbus 502 y servidor OPC UA 4840 | Solo panel HTTP `127.0.0.1:8080` |
-| `trainer` | Genera FC03; emite los comandos de los cuatro escenarios | Sin puertos publicados |
-| `dnp3` | Estación remota OpenDNP3 en 20000, mismo espacio de red que `plant` | Sin puertos publicados |
-| `suricata` | Captura pasiva de la ruta a `trainer` y alertas EVE JSON | Sin puertos publicados |
+| Contenedor | Función y publicación |
+|---|---|
+| `plant` | API/HMI/gemelo, servidor Modbus 502 y OPC UA 4840; solo HTTP 8000 expuesto al anfitrión en loopback 8080 |
+| `trainer` | Cliente FC03 cada 3 s, escenarios de comando y master DNP3; **sin** puertos publicados |
+| `dnp3` | Outstation OpenDNP3 en 20000; comparte espacio de red con `plant`, no es un host IP independiente |
+| `suricata` | IDS pasivo de la interfaz hacia `trainer`, firmas EVE JSON; sin puerto publicado |
+| `sensor` | `tcpdump` pasivo con respaldo AF_PACKET en QEMU, PCAP Ethernet rotativo; sin puerto publicado |
 
-La red Docker `control` es `internal: true`; `dashboard` conecta el panel al anfitrión. Esto aproxima un **conducto** de entrenamiento, no una DMZ o zona IEC 62443 certificada. Consulte [arquitectura](docs/arquitectura.md), [escenarios y límites](docs/escenarios-ataque.md), [mapeo MITRE/IEC](docs/mapping-mitre-ics.md) y [diagnóstico](docs/diagnostico.md). El documento de [validación](docs/validacion.md) detalla pruebas reproducibles y límites conocidos.
+`control` es una red Docker `internal: true`; `dashboard` transporta el acceso web local. Las zonas/conductos de la pantalla son un **modelo de aula**, no una DMZ, separación Purdue real ni certificación IEC 62443. Consulte [arquitectura](docs/arquitectura.md), [escenarios y límites](docs/escenarios-ataque.md), [mapeo MITRE/IEC](docs/mapping-mitre-ics.md), [validación](docs/validacion.md), [diagnóstico](docs/diagnostico.md) y [checklist de merge](docs/merge.md).
 
-**Dependencia DNP3:** la estación remota usa `dnp3-python==0.3.0b1`, una distribución cuya versión está marcada *yanked* en PyPI. Su rueda para Python 3.11 solo está disponible en Linux `x86_64`: Compose fija `linux/amd64` para `plant`, `trainer` y `dnp3` y no requiere una rueda `arm64`. Se validó en Linux amd64; en ARM64 depende de la emulación del entorno Docker y su rendimiento puede ser menor. **No es apta para producción industrial.** El master `dnp3/native_master.py` implementa solo la transacción necesaria para esta maqueta: CRC, comando analógico y lectura de retorno; no es una pila DNP3 general ni soporta fragmentación arbitraria o autenticación segura. Si la rueda deja de estar disponible, la construcción puede fallar: verifique la instalación antes de cada taller. [7]
+Cada guía contiene una matriz específica: en Modbus y OPC UA se representa **Modify Parameter (T0836)**; en DNP3 se representa **Manipulation of Control (T0831)**; la línea base incluye lectura de proceso y límites de observación. El proxy Modbus es **una trama creada/editada y enviada a `plant:502`**, no intercepción transparente ni AiTM. FR1–FR7 se usan para proponer controles de identidad, uso, integridad, confidencialidad, flujo restringido, respuesta y disponibilidad **según aplique**; no se infiere SL-T/SL-A ni conformidad. **Ley chilena 21.663** se trata como contexto de gobernanza y reporte según el sujeto obligado; el laboratorio no determina aplicabilidad ni reemplaza revisión legal de texto vigente.
 
-El modelo de proceso incluye una parada por nivel/temperatura en software para ejercitar observación. **No es un SIS real.** Los eventos del gemelo, el PCAP y las firmas del IDS tienen orígenes distintos: confirme por lo menos dos fuentes antes de atribuir una anomalía.
-
-El visor incorpora Three.js con su aviso de licencia MIT en [`app/static/vendor/THREE-LICENSE.txt`](app/static/vendor/THREE-LICENSE.txt). No se publica un archivo de licencia para el código original del repositorio; el propietario puede elegirla por separado.
-
-## Comprobaciones y solución de problemas
+## Verificar, diagnosticar y conservar evidencia
 
 ```bash
 docker compose config --quiet
 docker compose ps
-docker compose logs --tail=100 plant trainer dnp3 suricata
 bash scripts/verify-lab.sh
-curl -fsS http://127.0.0.1:8080/api/health
+python3 scripts/verify-workspaces.py
+docker compose exec -T plant python -m unittest discover -s app/tests
+docker compose logs --tail=100 plant trainer dnp3 suricata sensor
+curl -fsS http://127.0.0.1:8080/api/packets
 ```
 
-Si el panel abre pero un botón falla, espere a que `trainer` esté **healthy**, revise sus logs y ejecute `verify-lab.sh`. Si el estado cambia pero no aparece una firma IDS, compruebe `docker compose logs suricata` y el mensaje `Suricata: interfaz de control ...`; **no** confunda una alerta analítica con una firma capturada. En algunos anfitriones Linux que mezclan backends `iptables-legacy` y `nftables`, Docker puede bloquear la comunicación entre puentes; la [guía de diagnóstico](docs/diagnostico.md) explica cómo identificarlo sin copiar reglas de firewall ajenas. Nunca aplique `down -v` como primer paso de diagnóstico si necesita conservar evidencia.
+El primer script prueba los escenarios heredados y una firma FC06 real. El segundo comprueba **las cuatro páginas, sus matrices, acciones cruzadas rechazadas, FC03, FC06, OPC UA y DNP3 con estado y payload PCAP recién capturado, descarga y estabilidad del reset**. Acepta `LAB_VERIFY_PORT=18080` para revisar otra instancia **solo en loopback**. Las pruebas unitarias también verifican el filtro del sensor AF_PACKET; `docker compose exec -T trainer python /lab/dnp3/test_native_unit.py` comprueba que un readback DNP3 retrasado se recupera **sin repetir la orden de control**. Si el panel se desconecta, **no genera tráfico/estados falsos**: consulte [diagnóstico](docs/diagnostico.md). Si la distribución DNP3 yanked deja de estar disponible, el build puede fallar; informe la limitación en vez de sustituirla silenciosamente por HTTP ficticio.
 
-## Referencias
+Para parar **sin borrar** evidencia: `docker compose down`. **No use `docker compose down -v` si necesita los volúmenes** `evidence`, `suricata-logs` y `live-captures`. Los PCAP manuales de `pcaps/` son archivos del anfitrión y no se borran con `down`. Solo use `down -v` cuando haya decidido descartar esas evidencias.
 
-[1]: https://reference.opcfoundation.org/specs/OPC-10000-2/4 "OPC UA Part 2: Security Model"
-[2]: https://dnp3.github.io/docs/guide/3.0.0/api/outstations/ "OpenDNP3: outstations"
-[3]: https://csrc.nist.gov/pubs/sp/800/82/r3/final "NIST SP 800-82 Rev. 3, Guide to Operational Technology Security"
-[4]: https://docs.suricata.io/en/latest/rules/modbus-keyword.html "Suricata Modbus rules documentation"
-[5]: https://docs.docker.com/desktop/settings-and-maintenance/settings/ "Docker Desktop settings: Rosetta for x86_64/amd64 emulation on Apple Silicon"
-[6]: https://docs.docker.com/reference/compose-file/build/ "Docker Compose Build Specification: image and pull_policy"
-[7]: https://pypi.org/pypi/dnp3-python/0.3.0b1/json "Metadatos PyPI de dnp3-python: ruedas disponibles y estado yanked"
+## Referencias de base
+
+- [NIST SP 800-82 Rev. 3, Guide to Operational Technology Security](https://csrc.nist.gov/pubs/sp/800/82/r3/final).
+- [MITRE ATT&CK for ICS](https://attack.mitre.org/matrices/ics/).
+- [OPC UA Security Model](https://reference.opcfoundation.org/specs/OPC-10000-2/4).
+- [IEC 62443: visión de estándares, zonas y conductos](https://syc-se.iec.ch/deliveries/cybersecurity-guidelines/security-standards-and-best-practices/iec-62443/).
+- [Ley 21.663, Biblioteca del Congreso Nacional de Chile](https://www.bcn.cl/leychile/navegar?idNorma=1202434).
+
+El visor Three.js incluye su aviso de licencia MIT en [`app/static/vendor/THREE-LICENSE.txt`](app/static/vendor/THREE-LICENSE.txt). **Este repositorio no trae licencia para su código original**: su titular debe elegirla expresamente antes de autorizar reutilización por terceros.

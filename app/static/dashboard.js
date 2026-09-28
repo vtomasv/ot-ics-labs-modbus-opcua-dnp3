@@ -1,6 +1,7 @@
 import { initPlantScene } from './scene.js';
+import { activeId, initLabWorkspace } from './lab.js';
 
-const API = Object.freeze({ state: '/api/state', events: '/api/events', alerts: '/api/alerts', health: '/api/health', traffic: '/api/traffic', scenario: name => `/api/scenario/${encodeURIComponent(name)}` });
+const API = Object.freeze({ state: '/api/state', events: '/api/events', alerts: '/api/alerts', health: '/api/health', traffic: '/api/traffic', scenario: name => `/api/labs/${activeId}/action/${encodeURIComponent(name)}` });
 const $ = id => document.getElementById(id);
 const ui = {
   connectionPill: $('connection-pill'), connectionLabel: $('connection-label'), clock: $('clock'), lastUpdate: $('last-update'),
@@ -24,7 +25,6 @@ let scene;
 let pollTimer;
 let pollInFlight = false;
 let connected = false;
-let usingDemo = false;
 let latestState = null;
 let eventCache = [];
 let alertCache = [];
@@ -51,7 +51,7 @@ async function getJson(url, timeout = 4800) {
 
 async function postScenario(name) {
   const response = await fetch(API.scenario(name), { method: 'POST', headers: { Accept: 'application/json' }, cache: 'no-store' });
-  if (!response.ok) throw new Error(`HTTP ${response.status}`); return response.json();
+  if (!response.ok) { const error = await response.json().catch(() => ({})); throw new Error(error.detail || `HTTP ${response.status}`); } return response.json();
 }
 
 function updateState(state) {
@@ -63,17 +63,17 @@ function updateState(state) {
   const anomaly = trip || speed > 60 || Number(state.traffic_signal) === 0 || Number(state.sign_code) >= 2;
   ui.safetyState.textContent = trip ? 'TRIP ACTIVO' : 'SEGURO'; ui.safetyBadge.textContent = anomaly ? 'ATENCIÓN' : 'NOMINAL'; ui.safetyBadge.style.color = anomaly ? 'var(--red)' : 'var(--green)';
   ui.pumpToggle.checked = pump; if (document.activeElement !== ui.speedSlider) { ui.speedSlider.value = clamp(speed, 0, 60); ui.speedValue.textContent = `${speed.toFixed(0)} Hz${speed > 60 ? ' / ANÓMALO' : ''}`; updateRangeBackground(); }
-  const traffic = clamp(Number(state.traffic_signal) || 0, 0, 2); const sign = clamp(Number(state.sign_code) || 0, 0, 3); ui.trafficState.textContent = trafficNames[traffic]; ui.signState.textContent = signNames[sign]; ui.signMessage.textContent = signNames[sign]; ui.physicalSign.style.borderColor = sign >= 2 ? 'rgba(250,93,93,.55)' : 'rgba(242,178,75,.24)'; ui.physicalSign.style.color = sign >= 2 ? 'var(--red)' : 'var(--amber)'; ui.trafficLight.className = `state-light ${traffic === 0 ? 'red' : traffic === 1 ? 'amber' : 'green'}`;
+  const traffic = clamp(Number(state.traffic_signal) || 0, 0, 2); const sign = clamp(Number(state.sign_code) || 0, 0, 3); ui.trafficState.textContent = trafficNames[traffic]; ui.signState.textContent = signNames[sign]; ui.signMessage.textContent = signNames[sign]; ui.physicalSign.style.borderColor = sign >= 2 ? '#e5aca7' : '#efdbbc'; ui.physicalSign.style.color = sign >= 2 ? 'var(--red)' : 'var(--amber)'; ui.trafficLight.className = `state-light ${traffic === 0 ? 'red' : traffic === 1 ? 'amber' : 'green'}`;
   scene?.updateState(state); flowHistory.push(flow); if (flowHistory.length > 32) flowHistory.shift(); renderSparkline();
   const updated = state.updated_at ? timeLabel(state.updated_at) : timeLabel(); ui.lastUpdate.textContent = `Última lectura: ${updated}`;
 }
 
-function updateRangeBackground() { const value = Number(ui.speedSlider.value); ui.speedSlider.style.background = `linear-gradient(90deg, var(--cyan) 0%, var(--cyan) ${value / 60 * 100}%, #1c3c43 ${value / 60 * 100}%, #1c3c43 100%)`; }
+function updateRangeBackground() { const value = Number(ui.speedSlider.value); ui.speedSlider.style.background = `linear-gradient(90deg, var(--lab-accent) 0%, var(--lab-accent) ${value / 60 * 100}%, var(--track) ${value / 60 * 100}%, var(--track) 100%)`; }
 function renderSparkline() { const el = $('flow-sparkline'); if (!el || !flowHistory.length) return; const min = Math.min(...flowHistory), max = Math.max(...flowHistory, min + 1); const points = flowHistory.map((v, i) => `${i / Math.max(flowHistory.length - 1, 1) * 100}% ${100 - (v - min) / (max - min) * 90}%`).join(','); el.style.clipPath = `polygon(0 100%, ${points}, 100% 100%)`; el.style.background = 'var(--cyan-deep)'; el.style.opacity = '.85'; }
 
 function renderEvents(events = []) {
   eventCache = Array.isArray(events) ? events.slice(0, 100) : []; ui.eventCount.textContent = `${eventCache.length} evento${eventCache.length === 1 ? '' : 's'}`;
-  if (!eventCache.length) { ui.trafficList.innerHTML = '<div class="empty-state">Esperando paquetes…</div>'; ui.eventBand.innerHTML = '<span class="empty-band">Sin eventos registrados</span>'; return; }
+  if (!eventCache.length) { ui.trafficList.innerHTML = '<div class="empty-state">Esperando eventos de aplicación…</div>'; ui.eventBand.innerHTML = '<span class="empty-band">Sin eventos registrados</span>'; return; }
   const frameEvent = eventCache.find(event => event?.frame_before || event?.frameBefore || event?.frame_after || event?.frameAfter); if (frameEvent) renderFrame(frameEvent);
   ui.trafficList.innerHTML = eventCache.slice(0, 6).map(event => `<div class="traffic-item"><span class="traffic-time">${timeLabel(event.ts)}</span><span class="proto ${protocolClass(event.protocol)}">${protocolClass(event.protocol) === 'modbus' ? 'MB' : protocolClass(event.protocol) === 'opcua' ? 'OP' : 'D3'}</span><span class="traffic-detail" title="${escapeHtml(event.detail || '')}">${escapeHtml(event.detail || event.source || 'Evento de proceso')}</span></div>`).join('');
   ui.eventBand.innerHTML = eventCache.slice().reverse().slice(0, 70).map(event => `<i class="event-segment ${severityClass(event.severity)}" title="${escapeHtml(event.detail || '')}"></i>`).join('');
@@ -86,29 +86,27 @@ function renderTraffic(traffic = []) {
 
 function renderAlerts(alerts = []) {
   alertCache = Array.isArray(alerts) ? alerts.slice(0, 100) : []; const count = alertCache.length; ui.alertCount.textContent = count; const elevated = count > 0 || eventCache.some(e => ['critical', 'high', 'alta'].some(x => String(e.severity || '').toLowerCase().includes(x)));
-  ui.riskScore.textContent = elevated ? 'REVISAR' : 'OK'; ui.riskScore.style.color = elevated ? 'var(--amber)' : 'var(--green)'; ui.scoreRing.style.borderColor = elevated ? 'var(--amber)' : 'var(--green)'; ui.riskSummary.textContent = elevated ? 'Se detectaron indicadores que requieren revisión del instructor. Verifica el origen antes de continuar.' : 'No hay señales de compromiso activas. Mantén los comandos dentro del escenario.';
+  ui.riskScore.textContent = elevated ? 'REVISAR' : 'OK'; ui.riskScore.style.color = elevated ? 'var(--amber)' : 'var(--green)'; ui.scoreRing.style.borderColor = elevated ? 'var(--amber)' : 'var(--green)'; ui.riskSummary.textContent = elevated ? 'Hay indicadores históricos de sesiones de la maqueta. Revisa hora, origen y PCAP; no implican compromiso activo.' : 'Sin alertas registradas en el historial consultado; ausencia no demuestra seguridad.';
   ui.alertStrip.innerHTML = count ? `<span class="alert-icon">!</span><span>${count} alerta${count === 1 ? '' : 's'} en el perímetro OT</span>` : '<span class="alert-icon">!</span><span>Alertas recientes se mostrarán aquí.</span>';
 }
 
 function renderFrame(event) {
   const before = event?.frame_before || event?.frameBefore; const after = event?.frame_after || event?.frameAfter; if (!before && !after) return;
-  ui.frameBefore.textContent = before || '—'; ui.frameAfter.textContent = after || '—'; ui.frameStatus.textContent = 'TRAMA COMPARADA / PROXY'; ui.frameStatus.classList.add('captured');
+  ui.frameBefore.textContent = before || '—'; ui.frameAfter.textContent = after || '—'; ui.frameStatus.textContent = 'COMPARACIÓN DEL PROXY'; ui.frameStatus.classList.add('captured');
 }
 
 function escapeHtml(value) { return String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char])); }
 
-function demoState() { const t = Date.now() / 1000; const level = 61 + Math.sin(t / 10) * 5; const speed = Number(ui.speedSlider.value) || 35; return { tank_level: level, pump_enabled: ui.pumpToggle.checked, speed_setpoint: speed, temperature: 31.4 + Math.sin(t / 17) * .9, flow: ui.pumpToggle.checked ? 54 + Math.sin(t / 8) * 4 : 0, traffic_signal: 2, sign_code: 0, safety_trip: false, updated_at: new Date().toISOString() }; }
-function demoEvents() { return [{ ts: new Date(Date.now() - 24000).toISOString(), protocol: 'Modbus TCP', source: 'PLC-01', detail: 'FC03 lectura TK-101 · nivel', severity: 'normal' }, { ts: new Date(Date.now() - 13000).toISOString(), protocol: 'OPC UA', source: 'SCADA-01', detail: 'Read /Plant/P101/Flow', severity: 'normal' }, { ts: new Date().toISOString(), protocol: 'DNP3', source: 'RTU-03', detail: 'Heartbeat / estación online', severity: 'normal' }]; }
-
 async function poll() {
   if (pollInFlight) return; pollInFlight = true;
   try {
-    const [state, events, alerts] = await Promise.all([getJson(API.state), getJson(API.events), getJson(API.alerts)]); usingDemo = false; setConnection('online', 'API CONECTADA'); updateState(state); renderEvents(events?.events || []); renderAlerts(alerts?.alerts || []);
+    const [state, events, alerts] = await Promise.all([getJson(API.state), getJson(API.events), getJson(API.alerts)]); setConnection('online', 'API CONECTADA'); updateState(state); renderEvents(events?.events || []); renderAlerts(alerts?.alerts || []);
     try { await getJson(API.health, 2500); } catch (_) { /* health is advisory; state/events remain authoritative */ }
     try { const traffic = await getJson(API.traffic); renderTraffic(traffic?.traffic || []); } catch (_) { /* traffic is optional per contract */ }
   } catch (error) {
-    if (!usingDemo) { usingDemo = true; setConnection('demo', 'MODO DEMO'); showToast('API no disponible: visualización local de demostración activa.', true); }
-    updateState(demoState()); if (!eventCache.length) renderEvents(demoEvents()); renderAlerts([]);
+    if (connected) showToast('API no disponible: datos congelados; no se simulan eventos ni paquetes.', true);
+    setConnection('offline', 'SIN TELEMETRÍA');
+    ui.manualStatus.textContent = 'Sin API: los controles no envían comandos.';
   } finally { pollInFlight = false; }
 }
 
@@ -117,9 +115,9 @@ async function executeScenario(name, button) {
   ui.scenarioButtons.forEach(item => { item.disabled = true; }); button.classList.add('running'); ui.scenarioFeedback.className = 'scenario-feedback'; ui.scenarioFeedback.innerHTML = '<span class="feedback-mark">…</span><span>Ejecutando secuencia controlada…</span>';
   try {
     let result;
-    if (usingDemo) throw new Error('API no disponible: modo DEMO. No se envió ningún paquete OT.');
+    if (!connected) throw new Error('API no disponible. No se envió ningún paquete OT.');
     result = await postScenario(name);
-    if (result?.ok === false) throw new Error(result.message || 'El backend rechazó el escenario.'); completedScenarios.add(name); ui.scenarioCounter.textContent = `${completedScenarios.size}/5`; ui.scenarioFeedback.className = 'scenario-feedback success'; ui.scenarioFeedback.innerHTML = `<span class="feedback-mark">✓</span><span>${escapeHtml(result?.message || 'Escenario completado.')}</span>`; showToast(result?.message || 'Escenario completado.'); await poll();
+    if (result?.ok === false) throw new Error(result.message || 'El backend rechazó el escenario.'); completedScenarios.add(name); ui.scenarioCounter.textContent = `${completedScenarios.size}/${ui.scenarioButtons.filter(item => !item.hidden).length}`; ui.scenarioFeedback.className = 'scenario-feedback success'; ui.scenarioFeedback.innerHTML = `<span class="feedback-mark">✓</span><span>${escapeHtml(result?.message || 'Escenario completado.')}</span>`; showToast(result?.message || 'Escenario completado.'); await poll();
   } catch (error) { ui.scenarioFeedback.className = 'scenario-feedback error'; ui.scenarioFeedback.innerHTML = `<span class="feedback-mark">!</span><span>${escapeHtml(error.message || 'No se pudo ejecutar el escenario.')}</span>`; showToast(error.message || 'No se pudo ejecutar el escenario.', true); }
   finally { button.classList.remove('running'); ui.scenarioButtons.forEach(item => { item.disabled = false; }); }
 }
@@ -127,7 +125,7 @@ async function executeScenario(name, button) {
 function exportEvents() { const blob = new Blob([JSON.stringify({ exported_at: new Date().toISOString(), events: eventCache, alerts: alertCache }, null, 2)], { type: 'application/json' }); const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `ot-ics-events-${new Date().toISOString().slice(0, 19).replaceAll(':', '-')}.json`; link.click(); URL.revokeObjectURL(link.href); showToast('Eventos exportados en JSON local.'); }
 
 async function sendManual(component, value) {
-  if (usingDemo) { ui.manualStatus.textContent = 'Modo demo: no se transmitió ningún paquete.'; return; }
+  if (!connected) { ui.manualStatus.textContent = 'Sin API: no se transmitió ningún paquete.'; return; }
   try {
     const response = await fetch(`/api/manual/${component}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value }) });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -136,14 +134,14 @@ async function sendManual(component, value) {
 }
 
 function bindDashboard() {
-  ui.speedSlider.addEventListener('input', () => { ui.speedValue.textContent = `${ui.speedSlider.value} Hz`; updateRangeBackground(); if (usingDemo) updateState(demoState()); });
+  ui.speedSlider.addEventListener('input', () => { ui.speedValue.textContent = `${ui.speedSlider.value} Hz`; updateRangeBackground(); });
   ui.speedSlider.addEventListener('change', () => sendManual('speed', Number(ui.speedSlider.value)));
-  ui.pumpToggle.addEventListener('change', () => { ui.manualStatus.textContent = ui.pumpToggle.checked ? 'Comando local: arranque solicitado.' : 'Comando local: parada solicitada.'; sendManual('pump', Number(ui.pumpToggle.checked)); if (usingDemo) updateState(demoState()); });
+  ui.pumpToggle.addEventListener('change', () => { ui.manualStatus.textContent = ui.pumpToggle.checked ? 'Comando local: arranque solicitado.' : 'Comando local: parada solicitada.'; sendManual('pump', Number(ui.pumpToggle.checked)); });
   ui.scenarioButtons.forEach(button => button.addEventListener('click', () => executeScenario(button.dataset.scenario, button)));
   $('export-events')?.addEventListener('click', exportEvents);
   setInterval(() => { ui.clock.textContent = new Date().toLocaleTimeString('es-ES', { hour12: false }); }, 1000);
   const observer = new ResizeObserver(() => scene?.resize()); observer.observe($('scene-wrap'));
 }
 
-async function init() { bindDashboard(); updateRangeBackground(); try { scene = initPlantScene($('plant-canvas')); } catch (error) { console.error('Three.js scene error', error); showToast('No se pudo iniciar el visor 3D.', true); } await poll(); pollTimer = setInterval(poll, 1000); }
+async function init() { try { await initLabWorkspace({runAction: postScenario}); } catch (error) { $('page-title').textContent = 'Catálogo no disponible'; $('lab-summary').textContent = `No se cargaron las guías; ninguna acción de práctica estará habilitada (${error.message}).`; return; } bindDashboard(); updateRangeBackground(); try { scene = initPlantScene($('plant-canvas')); } catch (error) { console.error('Three.js scene error', error); showToast('No se pudo iniciar el visor 3D.', true); } await poll(); pollTimer = setInterval(poll, 1000); }
 init();

@@ -258,16 +258,31 @@ class NativeMaster:
         self.app_seq = (self.app_seq + 1) & 0x0F
         self.transport_seq = (self.transport_seq + 1) & 0x3F
         # The outstation publishes its analog input from the gemelo every
-        # 0.5 seconds. Its command response can precede that scan, so do not
-        # misclassify one stale readback as a failed command.
-        deadline = time.monotonic() + 5.0
+        # 0.5 seconds. Its command response can precede that scan. On a fresh
+        # OpenDNP3 session an unsolicited event can also stall a subsequent
+        # READ even though DIRECT_OPERATE already returned SUCCESS. Recover
+        # with a NEW, read-only session: NEVER retransmit the control command.
+        deadline = time.monotonic() + 8.0
         observed = None
+        read_error = None
+        reconnected = False
         while time.monotonic() < deadline:
-            observed = self.observe()
-            if int(observed) == value:
-                return observed
+            try:
+                observed = self.observe()
+                if int(observed) == value:
+                    return observed
+            except (OSError, DNP3Error) as exc:
+                read_error = exc
+                if reconnected or time.monotonic() >= deadline:
+                    break
+                reconnected = True
+                self.close()
+                try:
+                    self.__init__()  # new TCP reader; application sequences start at zero
+                except OSError as connect_error:
+                    raise DNP3Error(f"DNP3 readback reconnect failed: {connect_error}") from connect_error
             time.sleep(0.25)
-        raise DNP3Error(f"readback mismatch: requested {value}, observed {observed}")
+        raise DNP3Error(f"readback not verified: requested {value}, observed {observed}, error {read_error}")
 
     def observe(self) -> float:
         app = self._request_response(build_read_analog(self.app_seq, self.transport_seq), 0x01)
